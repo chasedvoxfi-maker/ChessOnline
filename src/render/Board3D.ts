@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import { buildBoard } from "./board";
-import { createMaterials, PIECE_FACTORIES, addOutline, type PieceMaterials } from "./pieceModels";
+import { createMaterials, PIECE_FACTORIES, addOutline, type PieceMaterials, type PieceFactory } from "./pieceModels";
 import { squareToWorld, worldToSquare } from "./coords";
 import { createSelectMarker, createLegalDot, createLastMoveMarker, CheckGlow, ConfettiSystem } from "./effects";
-import type { PieceColor, PieceType } from "../game/types";
+import type { PieceColor } from "../game/types";
 
 interface ActiveAnim {
   mesh: THREE.Object3D;
@@ -40,6 +40,7 @@ export class Board3D {
   renderer: THREE.WebGLRenderer;
   private container: HTMLElement;
   private materials: PieceMaterials;
+  private pieceFactories: Record<string, PieceFactory>;
   private pieceMeshes = new Map<string, THREE.Group>();
   private highlightLayer: THREE.Group;
   private raycastPlane: THREE.Mesh;
@@ -65,9 +66,10 @@ export class Board3D {
   interactionEnabled = true;
   onSquareClick: ((square: string) => void) | null = null;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, opts?: { pieceFactories?: Record<string, PieceFactory> }) {
     this.container = container;
     this.materials = createMaterials();
+    this.pieceFactories = opts?.pieceFactories ?? PIECE_FACTORIES;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -206,8 +208,8 @@ export class Board3D {
 
   // ---- piece placement / sync ----
 
-  placePiece(square: string, type: PieceType, color: PieceColor) {
-    const factory = PIECE_FACTORIES[type];
+  placePiece(square: string, type: string, color: PieceColor) {
+    const factory = this.pieceFactories[type];
     const group = factory(this.materials, color);
     if (color === "b") addOutline(group);
     group.scale.setScalar(0.95);
@@ -232,7 +234,7 @@ export class Board3D {
     this.pieceMeshes.clear();
   }
 
-  syncFromPieces(pieces: { type: PieceType; color: PieceColor; square: string }[]) {
+  syncFromPieces(pieces: { type: string; color: PieceColor; square: string }[]) {
     this.clearAllPieces();
     for (const p of pieces) this.placePiece(p.square, p.type, p.color);
   }
@@ -383,7 +385,7 @@ export class Board3D {
     });
   }
 
-  promotePiece(square: string, newType: PieceType, color: PieceColor) {
+  promotePiece(square: string, newType: string, color: PieceColor) {
     this.removePiece(square);
     const group = this.placePiece(square, newType, color);
     group.scale.setScalar(0.01);

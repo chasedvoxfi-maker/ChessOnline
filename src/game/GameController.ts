@@ -60,8 +60,8 @@ export class GameController {
       this.board.setOrientation("w");
     }
 
-    if (opts.resume) {
-      this.game.loadFen(opts.resume.fen);
+    if (opts.resume?.chess) {
+      this.game.loadFen(opts.resume.chess.fen);
       if (this.mode === "hotseat") this.board.setOrientation(this.game.turn);
     }
 
@@ -90,10 +90,11 @@ export class GameController {
     if (this.mode !== "hotseat" && this.mode !== "ai") return null;
     if (this.gameOver) return null;
     return {
+      kind: "chess",
       mode: this.mode,
       difficulty: this.difficulty,
-      fen: this.game.fen(),
       savedAt: Date.now(),
+      chess: { fen: this.game.fen() },
     };
   }
 
@@ -313,7 +314,7 @@ export class GameController {
 
   private handleNetMessage(msg: import("../net/OnlineSession").NetMessage) {
     if (msg.kind === "move") {
-      this.executeMove(msg.from, msg.to, msg.promotion);
+      this.executeMove(msg.from, msg.to, msg.promotion as PieceType | undefined);
     } else if (msg.kind === "resign") {
       this.gameOver = true;
       const winner = this.localHumanColor;
@@ -333,7 +334,7 @@ export class GameController {
 
   /** Clears the shared save slot, but only when this controller's own mode owns it (never touches a hotseat/AI save from an unrelated online session). */
   private clearSaveIfOwned() {
-    if (this.mode === "hotseat" || this.mode === "ai") clearSavedGame();
+    if (this.mode === "hotseat" || this.mode === "ai") clearSavedGame("chess");
   }
 
   /**

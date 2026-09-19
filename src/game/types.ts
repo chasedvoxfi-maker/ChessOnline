@@ -28,7 +28,7 @@ export type GameMode = "hotseat" | "ai" | "online";
 
 export interface GameOverInfo {
   winner: PieceColor | null; // null = draw
-  reason: "checkmate" | "stalemate" | "draw" | "resign" | "timeout" | "disconnect";
+  reason: "checkmate" | "stalemate" | "draw" | "resign" | "timeout" | "disconnect" | "no-moves" | "no-pieces" | "corners-win";
 }
 
 export type Difficulty = "easy" | "medium" | "hard" | "master";

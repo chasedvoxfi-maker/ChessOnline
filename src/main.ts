@@ -25,7 +25,7 @@ function clearApp() {
 }
 
 function describeSavedGame(saved: SavedGameState): ContinueInfo {
-  const chess = new Chess(saved.fen);
+  const chess = new Chess(saved.chess!.fen);
   const modeLabel = saved.mode === "ai" ? `С компьютером · ${DIFFICULTY_RU[saved.difficulty ?? "medium"]}` : "Два игрока за экраном";
   const turnLabel = chess.turn() === "w" ? "ход белых" : "ход чёрных";
   return { label: `${modeLabel} · ${turnLabel}` };
@@ -42,7 +42,7 @@ function showMenu() {
   }
   clearApp();
 
-  const saved = loadSavedGame();
+  const saved = loadSavedGame("chess");
 
   const menu = new Menu(
     {
@@ -67,7 +67,7 @@ function showMenu() {
       onContinue: () => {
         if (saved) startGame({ mode: saved.mode, difficulty: saved.difficulty, resume: saved });
       },
-      onDiscardSave: () => clearSavedGame(),
+      onDiscardSave: () => clearSavedGame("chess"),
     },
     saved ? describeSavedGame(saved) : null,
   );

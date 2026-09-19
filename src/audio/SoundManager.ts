@@ -126,7 +126,8 @@ export class SoundManager {
   }
 
   /** Victorious fanfare arpeggio + a congratulatory spoken line. */
-  playCheckmate(winner: PieceColor | null) {
+  /** Triumphant fanfare + spoken announcement. `announcement` defaults to chess's "Шах и мат!" phrasing. */
+  playVictory(winner: PieceColor | null, announcement?: string) {
     const ctx = this.ensureContext();
     const t0 = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5]; // C E G C E — triumphant major arpeggio
@@ -139,9 +140,14 @@ export class SoundManager {
     [523.25, 659.25, 783.99, 1046.5].forEach((f) => this.tone(f, 1.6, "sawtooth", 0.12, chordTime));
     void t0;
 
-    this.speak(
-      winner ? `Шах и мат! Победа за ${winner === "w" ? "белыми" : "чёрными"}! Поздравляем!` : "Ничья!",
-    );
+    const phrase =
+      announcement ?? (winner ? `Шах и мат! Победа за ${winner === "w" ? "белыми" : "чёрными"}! Поздравляем!` : "Ничья!");
+    this.speak(phrase);
+  }
+
+  /** @deprecated use playVictory — kept only as the chess-specific default. */
+  playCheckmate(winner: PieceColor | null) {
+    this.playVictory(winner);
   }
 
   playDraw() {

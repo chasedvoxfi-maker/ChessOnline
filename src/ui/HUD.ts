@@ -207,6 +207,15 @@ export class HUD {
     } else if (info.reason === "stalemate") {
       title = "Пат";
       subtitle = "Ничья: у соперника нет доступных ходов.";
+    } else if (info.reason === "no-moves") {
+      title = "Победа!";
+      subtitle = `Победа за ${info.winner === "w" ? "белыми" : "чёрными"}! У соперника не осталось ходов.`;
+    } else if (info.reason === "no-pieces") {
+      title = "Победа!";
+      subtitle = `Победа за ${info.winner === "w" ? "белыми" : "чёрными"}! Все шашки соперника взяты.`;
+    } else if (info.reason === "corners-win") {
+      title = "Победа!";
+      subtitle = `${info.winner === "w" ? "Белые" : "Чёрные"} первыми перевели все фишки в дальний угол! Поздравляем!`;
     } else if (info.reason === "disconnect") {
       title = "Соперник отключился";
       subtitle = "Соединение потеряно.";

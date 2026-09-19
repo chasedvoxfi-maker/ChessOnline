@@ -1,8 +1,9 @@
 import { Peer, type DataConnection } from "peerjs";
-import type { PieceColor, PieceType } from "../game/types";
+import type { PieceColor } from "../game/types";
 
+/** promotion is chess-only (the target piece letter); other games just leave it undefined. */
 export type NetMessage =
-  | { kind: "move"; from: string; to: string; promotion?: PieceType }
+  | { kind: "move"; from: string; to: string; promotion?: string }
   | { kind: "resign" }
   | { kind: "rematchRequest" }
   | { kind: "rematchAccept" }
@@ -105,7 +106,7 @@ export class OnlineSession {
     if (this.conn?.open) this.conn.send(msg);
   }
 
-  sendMove(from: string, to: string, promotion?: PieceType) {
+  sendMove(from: string, to: string, promotion?: string) {
     this.send({ kind: "move", from, to, promotion });
   }
 
