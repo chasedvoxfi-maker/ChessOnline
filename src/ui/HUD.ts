@@ -34,6 +34,8 @@ export class HUD {
           <div class="turn-label"><span class="turn-label-text">Ход белых</span><small class="turn-hint"></small></div>
         </div>
         <div class="hud-actions">
+          <button class="icon-btn" data-action="draw" title="Ничья">🤝</button>
+          <button class="icon-btn" data-action="resign" title="Сдаться">🏳️</button>
           <button class="icon-btn" data-action="mute" title="Звук">🔊</button>
           <button class="icon-btn" data-action="menu" title="Меню">☰</button>
         </div>
@@ -43,10 +45,6 @@ export class HUD {
       <div class="captured-trays">
         <div class="captured-tray" data-tray="w"></div>
         <div class="captured-tray" data-tray="b"></div>
-      </div>
-      <div class="hud-bottom">
-        <button class="hud-btn" data-action="draw">Ничья</button>
-        <button class="hud-btn danger" data-action="resign">Сдаться</button>
       </div>
     `;
 
@@ -71,10 +69,14 @@ export class HUD {
       return;
     }
     btn.dataset.confirm = "1";
-    btn.textContent = "Точно сдаться?";
+    btn.textContent = "⚠️";
+    btn.title = "Точно сдаться? Нажмите ещё раз";
+    btn.classList.add("confirm-pending");
     setTimeout(() => {
       btn.dataset.confirm = "0";
-      btn.textContent = "Сдаться";
+      btn.textContent = "🏳️";
+      btn.title = "Сдаться";
+      btn.classList.remove("confirm-pending");
     }, 3000);
   }
 

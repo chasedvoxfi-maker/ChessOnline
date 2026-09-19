@@ -457,6 +457,7 @@ button {
   pointer-events: auto;
   display: flex;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .icon-btn {
@@ -471,6 +472,11 @@ button {
 }
 .icon-btn:hover {
   border-color: var(--gold);
+}
+.icon-btn.confirm-pending {
+  border-color: var(--danger);
+  background: rgba(224, 92, 92, 0.25);
+  animation: check-flash 0.9s ease-in-out infinite;
 }
 
 .captured-trays {
@@ -493,13 +499,6 @@ button {
   font-size: 1.1rem;
   min-height: 2.2rem;
   align-items: center;
-}
-
-.hud-bottom {
-  display: flex;
-  justify-content: center;
-  gap: 0.7rem;
-  pointer-events: auto;
 }
 
 .hud-btn {
@@ -635,5 +634,27 @@ button {
   }
   .gameover-title {
     font-size: 2rem;
+  }
+  .turn-indicator {
+    gap: 0.4rem;
+    padding: 0.45rem 0.8rem 0.45rem 0.45rem;
+  }
+  .turn-dot {
+    width: 18px;
+    height: 18px;
+  }
+  .turn-label {
+    font-size: 0.85rem;
+  }
+  .turn-label .turn-hint {
+    display: none;
+  }
+  .hud-actions {
+    gap: 0.35rem;
+  }
+  .icon-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 0.95rem;
   }
 }

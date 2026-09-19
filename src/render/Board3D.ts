@@ -139,9 +139,24 @@ export class Board3D {
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
     this.camera.aspect = w / h;
+    this.applyResponsiveFraming(w / h);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
+    if (!this.cameraOverride) this.updateCameraPosition();
   };
+
+  /**
+   * Widens the FOV and pulls the camera back for narrow/portrait screens (phones) so the
+   * whole board — including the near edge closest to the player — stays inside the frame
+   * instead of being cropped by the aspect ratio or hidden behind the bottom HUD chrome.
+   */
+  private applyResponsiveFraming(aspect: number) {
+    const portraitness = Math.max(0, Math.min(1, 1 - aspect)); // 0 on wide screens, up to ~1 on tall phones
+    this.camera.fov = 50 + portraitness * 34;
+    this.camRadius = 7.4 + portraitness * 0.4;
+    this.camHeight = this.camRadius * (6.4 / 7.4);
+    this.camLookY = 0.35 - portraitness * 0.25;
+  }
 
   private updateCameraPosition() {
     const x = Math.sin(this.camAngle) * this.camRadius;
@@ -300,9 +315,8 @@ export class Board3D {
 
   resetCameraFraming() {
     this.cameraOverride = false;
-    this.camRadius = 7.4;
-    this.camHeight = 6.4;
-    this.camLookY = 0.35;
+    this.applyResponsiveFraming(this.camera.aspect);
+    this.camera.updateProjectionMatrix();
   }
 
   // ---- animation ----
