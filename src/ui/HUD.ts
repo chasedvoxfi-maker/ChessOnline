@@ -17,14 +17,23 @@ export interface HUDCallbacks {
   onMuteToggle: (muted: boolean) => void;
   /** Persists the current game so it can be resumed later. Returns false if this game can't be saved (online). */
   onSave: () => boolean;
+  /** Takes back one ply. Returns false if there was nothing to undo, or undo isn't available (online). */
+  onUndo: () => boolean;
 }
+
+/**
+ * Small screens — narrow portrait phones, or short landscape phones — can't fit seven icons
+ * next to the turn indicator, so every action but the menu toggle stays hidden until tapped
+ * open. Keep this in sync with the equivalent CSS media query below.
+ */
+const COMPACT_HUD = "(max-width: 480px), (orientation: landscape) and (max-height: 520px)";
 
 export class HUD {
   el: HTMLDivElement;
   private isHotseat: boolean;
   private callbacks: HUDCallbacks;
 
-  constructor(callbacks: HUDCallbacks, opts: { hotseat: boolean; saveable: boolean }) {
+  constructor(callbacks: HUDCallbacks, opts: { hotseat: boolean; saveable: boolean; undoable: boolean }) {
     this.callbacks = callbacks;
     this.isHotseat = opts.hotseat;
     this.el = document.createElement("div");
@@ -36,9 +45,11 @@ export class HUD {
           <div class="turn-label"><span class="turn-label-text">Ход белых</span><small class="turn-hint"></small></div>
         </div>
         <div class="hud-actions">
+          ${opts.undoable ? '<button class="icon-btn" data-action="undo" title="Отменить ход">↩️</button>' : ""}
           ${opts.saveable ? '<button class="icon-btn" data-action="save" title="Сохранить игру">💾</button>' : ""}
           <button class="icon-btn" data-action="draw" title="Ничья">🤝</button>
           <button class="icon-btn" data-action="resign" title="Сдаться">🏳️</button>
+          <button class="icon-btn rotate-btn" data-action="rotate" title="Повернуть экран">🔄</button>
           <button class="icon-btn" data-action="mute" title="Звук">🔊</button>
           <button class="icon-btn" data-action="menu" title="Меню">☰</button>
         </div>
@@ -49,12 +60,29 @@ export class HUD {
         <div class="captured-tray" data-tray="w"></div>
         <div class="captured-tray" data-tray="b"></div>
       </div>
+      <div class="rotate-toast hidden">Поверните телефон в горизонтальное положение</div>
     `;
 
-    this.el.querySelector('[data-action="menu"]')!.addEventListener("click", () => this.callbacks.onMenu());
+    const menuBtn = this.el.querySelector<HTMLButtonElement>('[data-action="menu"]')!;
+    const actions = this.el.querySelector<HTMLDivElement>(".hud-actions")!;
+    menuBtn.addEventListener("click", () => {
+      if (window.matchMedia(COMPACT_HUD).matches && !actions.classList.contains("expanded")) {
+        actions.classList.add("expanded");
+        return;
+      }
+      actions.classList.remove("expanded");
+      this.callbacks.onMenu();
+    });
+    // any other action collapses the toolbar back down once it's done its job
+    actions.addEventListener("click", (e) => {
+      const target = (e.target as HTMLElement).closest("button");
+      if (target && target !== menuBtn) actions.classList.remove("expanded");
+    });
     this.el.querySelector('[data-action="resign"]')!.addEventListener("click", () => this.confirmResign());
     this.el.querySelector('[data-action="draw"]')!.addEventListener("click", () => this.callbacks.onOfferDraw?.());
     this.el.querySelector('[data-action="save"]')?.addEventListener("click", () => this.handleSave());
+    this.el.querySelector('[data-action="undo"]')?.addEventListener("click", () => this.handleUndo());
+    this.el.querySelector('[data-action="rotate"]')!.addEventListener("click", () => void this.handleRotate());
 
     let muted = false;
     const muteBtn = this.el.querySelector<HTMLButtonElement>('[data-action="mute"]')!;
@@ -64,6 +92,28 @@ export class HUD {
       soundManager.setMuted(muted);
       this.callbacks.onMuteToggle(muted);
     });
+  }
+
+  private async handleRotate() {
+    try {
+      const orientation = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
+      if (orientation?.lock) {
+        if (!document.fullscreenElement) await document.documentElement.requestFullscreen().catch(() => {});
+        await orientation.lock("landscape");
+        return;
+      }
+    } catch {
+      // unsupported (notably iOS Safari) — fall through to the manual prompt
+    }
+    const toast = this.el.querySelector<HTMLDivElement>(".rotate-toast")!;
+    toast.classList.remove("hidden");
+    setTimeout(() => toast.classList.add("hidden"), 3000);
+  }
+
+  private handleUndo() {
+    const ok = this.callbacks.onUndo();
+    if (ok) soundManager.playSelect();
+    else soundManager.playIllegal();
   }
 
   private handleSave() {

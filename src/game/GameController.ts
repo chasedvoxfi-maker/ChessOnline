@@ -17,6 +17,7 @@ export interface GameControllerOptions {
 export interface GameControllerCallbacks {
   onTurnChange?: (turn: PieceColor) => void;
   onMove?: (move: MoveResult, captured: { type: PieceType; color: PieceColor }[]) => void;
+  onUndo?: (turn: PieceColor, captured: { type: PieceType; color: PieceColor }[]) => void;
   onGameOver?: (info: GameOverInfo) => void;
   onPromotionNeeded?: (color: PieceColor) => Promise<PieceType>;
   onOpponentDisconnected?: () => void;
@@ -61,11 +62,10 @@ export class GameController {
 
     if (opts.resume) {
       this.game.loadFen(opts.resume.fen);
-      this.capturedByWhite = [...opts.resume.capturedByWhite];
-      this.capturedByBlack = [...opts.resume.capturedByBlack];
       if (this.mode === "hotseat") this.board.setOrientation(this.game.turn);
     }
 
+    this.recomputeCaptured();
     this.syncBoard();
 
     if (opts.resume && this.mode === "ai" && this.game.turn !== this.localHumanColor) {
@@ -93,10 +93,31 @@ export class GameController {
       mode: this.mode,
       difficulty: this.difficulty,
       fen: this.game.fen(),
-      capturedByWhite: [...this.capturedByWhite],
-      capturedByBlack: [...this.capturedByBlack],
       savedAt: Date.now(),
     };
+  }
+
+  private static readonly START_COUNTS: Record<PieceType, number> = { p: 8, n: 2, b: 2, r: 2, q: 1, k: 1 };
+
+  /** Derives captured-piece lists from the current board, rather than tracking pushes — this stays
+   * correct across undo, resume-from-FEN, and any other path that doesn't go through executeMove. */
+  private recomputeCaptured() {
+    const onBoard: Record<PieceColor, Record<PieceType, number>> = {
+      w: { p: 0, n: 0, b: 0, r: 0, q: 0, k: 0 },
+      b: { p: 0, n: 0, b: 0, r: 0, q: 0, k: 0 },
+    };
+    for (const piece of this.game.pieces()) onBoard[piece.color][piece.type]++;
+
+    const missing = (counts: Record<PieceType, number>): PieceType[] => {
+      const out: PieceType[] = [];
+      for (const type of ["q", "r", "b", "n", "p"] as PieceType[]) {
+        for (let i = 0; i < GameController.START_COUNTS[type] - counts[type]; i++) out.push(type);
+      }
+      return out;
+    };
+
+    this.capturedByWhite = missing(onBoard.b); // black pieces white has captured
+    this.capturedByBlack = missing(onBoard.w); // white pieces black has captured
   }
 
   private syncBoard() {
@@ -229,10 +250,7 @@ export class GameController {
   }
 
   private postMoveUpdates(result: MoveResult) {
-    if (result.captured) {
-      if (result.color === "w") this.capturedByWhite.push(result.captured);
-      else this.capturedByBlack.push(result.captured);
-    }
+    if (result.captured) this.recomputeCaptured();
     this.callbacks.onMove?.(result, this.capturedSummary());
 
     if (result.isCheckmate) {
@@ -277,7 +295,7 @@ export class GameController {
     if (state) saveGame(state);
   }
 
-  private capturedSummary() {
+  capturedSummary() {
     return [
       ...this.capturedByWhite.map((type) => ({ type, color: "b" as PieceColor })),
       ...this.capturedByBlack.map((type) => ({ type, color: "w" as PieceColor })),
@@ -316,6 +334,38 @@ export class GameController {
   /** Clears the shared save slot, but only when this controller's own mode owns it (never touches a hotseat/AI save from an unrelated online session). */
   private clearSaveIfOwned() {
     if (this.mode === "hotseat" || this.mode === "ai") clearSavedGame();
+  }
+
+  /**
+   * Takes back one ply. In AI mode this also unwinds the computer's reply when there is one,
+   * so a single tap always hands the turn straight back to the human. Not available online —
+   * the opponent's board can't be un-synced. Works even after the game has ended.
+   */
+  undo(): boolean {
+    if (this.mode === "online" || this.busy) return false;
+    if (!this.game.undo()) return false;
+    if (this.mode === "ai" && this.game.turn !== this.localHumanColor) this.game.undo();
+
+    this.gameOver = false;
+    this.selected = null;
+    this.board.showSelection(null);
+    this.board.clearLegalMoves();
+    this.board.resetCameraFraming();
+    this.recomputeCaptured();
+    this.syncBoard();
+
+    this.board.clearCheck();
+    if (this.game.inCheck()) {
+      const kingSq = this.game.kingSquare(this.game.turn);
+      if (kingSq) this.board.showCheck(kingSq);
+    }
+    if (this.mode === "hotseat") this.board.setOrientation(this.game.turn);
+    else this.board.setOrientation(this.localHumanColor);
+
+    soundManager.playMove();
+    this.callbacks.onUndo?.(this.game.turn, this.capturedSummary());
+    this.autosave();
+    return true;
   }
 
   restart() {

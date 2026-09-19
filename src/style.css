@@ -479,6 +479,46 @@ button {
   animation: check-flash 0.9s ease-in-out infinite;
 }
 
+/* Rotating further makes no sense once already in landscape. */
+@media (orientation: landscape) {
+  .rotate-btn {
+    display: none;
+  }
+}
+
+/* Narrow portrait or short landscape phones can't fit seven icons: collapse behind the menu toggle. */
+@media (max-width: 480px), (orientation: landscape) and (max-height: 520px) {
+  .hud-actions .icon-btn {
+    display: none;
+  }
+  .hud-actions .icon-btn[data-action="menu"] {
+    display: flex;
+  }
+  .hud-actions.expanded .icon-btn {
+    display: flex;
+  }
+}
+
+.rotate-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  background: var(--bg-panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 0.7rem 1.3rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+  z-index: 10;
+  transition: opacity 0.3s ease;
+}
+.rotate-toast.hidden {
+  display: none;
+}
+
 .captured-trays {
   pointer-events: none;
   display: flex;

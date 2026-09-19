@@ -1,11 +1,9 @@
-import type { Difficulty, GameMode, PieceType } from "./types";
+import type { Difficulty, GameMode } from "./types";
 
 export interface SavedGameState {
   mode: Extract<GameMode, "hotseat" | "ai">;
   difficulty?: Difficulty;
   fen: string;
-  capturedByWhite: PieceType[];
-  capturedByBlack: PieceType[];
   savedAt: number;
 }
 

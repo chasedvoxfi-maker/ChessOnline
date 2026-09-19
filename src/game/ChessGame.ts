@@ -133,6 +133,11 @@ export class ChessGame {
     this.emit("reset", undefined);
   }
 
+  /** Undoes the last ply. Returns false (no-op) if there is no move to undo. */
+  undo(): boolean {
+    return !!this.chess.undo();
+  }
+
   kingSquare(color: PieceColor): Square | null {
     for (const row of this.chess.board()) {
       for (const cell of row) {

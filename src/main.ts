@@ -109,8 +109,9 @@ function startGame(opts: StartOpts) {
       onRematch: () => controller?.restart(),
       onMuteToggle: () => {},
       onSave: () => controller?.saveNow() ?? false,
+      onUndo: () => controller?.undo() ?? false,
     },
-    { hotseat: opts.mode === "hotseat", saveable: opts.mode !== "online" },
+    { hotseat: opts.mode === "hotseat", saveable: opts.mode !== "online", undoable: opts.mode !== "online" },
   );
   screen.appendChild(hud.el);
 
@@ -120,16 +121,17 @@ function startGame(opts: StartOpts) {
       hud.updateCaptured(captured);
       hud.setTurn(controller!.game.turn, controller!.game.inCheck());
     },
+    onUndo: (turn, captured) => {
+      hud.updateCaptured(captured);
+      hud.setTurn(turn, controller!.game.inCheck());
+    },
     onPromotionNeeded: (color) => hud.promptPromotion(color),
     onGameOver: (info) => hud.showGameOver(info),
     onOpponentDisconnected: () => hud.showDisconnectNotice(),
   };
 
   if (opts.resume) {
-    hud.updateCaptured([
-      ...opts.resume.capturedByWhite.map((type) => ({ type, color: "b" as const })),
-      ...opts.resume.capturedByBlack.map((type) => ({ type, color: "w" as const })),
-    ]);
+    hud.updateCaptured(controller.capturedSummary());
     hud.setTurn(controller.game.turn, controller.game.inCheck());
   } else {
     hud.setTurn("w", false);

@@ -147,23 +147,28 @@ export class Board3D {
     const w = vv ? Math.round(vv.width) : this.container.clientWidth;
     const h = vv ? Math.round(vv.height) : this.container.clientHeight;
     this.camera.aspect = w / h;
-    this.applyResponsiveFraming(w / h);
+    this.applyResponsiveFraming(w / h, h);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     if (!this.cameraOverride) this.updateCameraPosition();
   };
 
   /**
-   * Widens the FOV and pulls the camera back for narrow/portrait screens (phones) so the
-   * whole board — including the near edge closest to the player — stays inside the frame
-   * instead of being cropped by the aspect ratio or hidden behind the bottom HUD chrome.
+   * Reframes the camera so the board reads as large as possible on small screens, near edge
+   * included. Portrait phones are narrow (low aspect) and need a *wider* FOV pulled back
+   * slightly, or the side files get cropped. Landscape phones are merely short (low pixel
+   * height despite a wide aspect) and need the opposite: a *tighter* FOV pulled in, so the
+   * board's vertical extent fills more of the limited height instead of leaving it framed
+   * like a desktop window with empty margins above and below.
    */
-  private applyResponsiveFraming(aspect: number) {
+  private applyResponsiveFraming(aspect: number, height: number) {
     const portraitness = Math.max(0, Math.min(1, 1 - aspect)); // 0 on wide screens, up to ~1 on tall phones
-    this.camera.fov = 50 + portraitness * 34;
-    this.camRadius = 7.4 + portraitness * 0.4;
+    const shortScreen = aspect > 1.15 ? Math.max(0, Math.min(1, (560 - height) / 340)) : 0; // 0 at h>=560, 1 at h<=220
+
+    this.camera.fov = 50 + portraitness * 46 - shortScreen * 10;
+    this.camRadius = 7.4 - portraitness * 1.4 - shortScreen * 1.4;
     this.camHeight = this.camRadius * (6.4 / 7.4);
-    this.camLookY = 0.35 - portraitness * 0.25;
+    this.camLookY = 0.35 - portraitness * 0.25 + shortScreen * 0.22;
   }
 
   private updateCameraPosition() {
@@ -323,8 +328,7 @@ export class Board3D {
 
   resetCameraFraming() {
     this.cameraOverride = false;
-    this.applyResponsiveFraming(this.camera.aspect);
-    this.camera.updateProjectionMatrix();
+    this.handleResize();
   }
 
   // ---- animation ----
