@@ -104,6 +104,10 @@ export class Board3D {
 
     this.renderer.domElement.addEventListener("click", this.handleClick);
     window.addEventListener("resize", this.handleResize);
+    // Mobile Safari shows/hides its address bar and toolbar without always firing a
+    // window "resize" event, which would leave the canvas sized for stale dimensions
+    // and push the board's near edge behind the toolbar. visualViewport catches that.
+    window.visualViewport?.addEventListener("resize", this.handleResize);
     this.handleResize();
 
     this.animate();
@@ -136,8 +140,12 @@ export class Board3D {
   }
 
   private handleResize = () => {
-    const w = this.container.clientWidth;
-    const h = this.container.clientHeight;
+    // Prefer the visual viewport: on mobile Safari a fixed/inset:0 container can still
+    // report the larger layout-viewport size while the address bar/toolbar visually
+    // cover part of it, which would frame the camera for space that isn't actually visible.
+    const vv = window.visualViewport;
+    const w = vv ? Math.round(vv.width) : this.container.clientWidth;
+    const h = vv ? Math.round(vv.height) : this.container.clientHeight;
     this.camera.aspect = w / h;
     this.applyResponsiveFraming(w / h);
     this.camera.updateProjectionMatrix();
@@ -449,6 +457,7 @@ export class Board3D {
 
   dispose() {
     window.removeEventListener("resize", this.handleResize);
+    window.visualViewport?.removeEventListener("resize", this.handleResize);
     this.renderer.domElement.removeEventListener("click", this.handleClick);
     this.renderer.dispose();
   }
