@@ -42,18 +42,55 @@ export function createMaterials(): PieceMaterials {
     reflectivity: 0.4,
   });
   const black = new THREE.MeshPhysicalMaterial({
-    color: 0x231a14,
+    color: 0x2a2018,
     roughness: 0.28,
     metalness: 0.05,
     clearcoat: 0.6,
     clearcoatRoughness: 0.2,
     reflectivity: 0.5,
   });
+  // A subtle lighter-toward-the-top gradient, in world space so it reads correctly across
+  // every sub-mesh of a piece (crown spikes, cross finials, ...), not just the main body.
+  black.onBeforeCompile = (shader) => {
+    shader.uniforms.uGradientColor = { value: new THREE.Color(0x5a4632) };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying float vGradWorldY;")
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvGradWorldY = (modelMatrix * vec4(transformed, 1.0)).y;",
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying float vGradWorldY;\nuniform vec3 uGradientColor;")
+      .replace(
+        "#include <color_fragment>",
+        "#include <color_fragment>\n  float gradT = clamp(vGradWorldY / 1.3, 0.0, 1.0);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uGradientColor, gradT * 0.5);",
+      );
+  };
   return { white, black };
 }
 
 function pickMat(mats: PieceMaterials, color: "w" | "b") {
   return color === "w" ? mats.white : mats.black;
+}
+
+/**
+ * "Inverted hull" outline: a slightly larger, back-face-only copy of every mesh in the group,
+ * rendered in a warm highlight color behind the piece so its silhouette reads clearly against
+ * a dark background and against other black pieces — without any postprocessing pass.
+ */
+export function addOutline(root: THREE.Object3D, color = 0xc9a876, thickness = 0.035) {
+  const targets: THREE.Mesh[] = [];
+  root.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) targets.push(obj);
+  });
+  const outlineMat = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+  for (const m of targets) {
+    const outline = new THREE.Mesh(m.geometry, outlineMat);
+    outline.position.copy(m.position);
+    outline.rotation.copy(m.rotation);
+    outline.scale.copy(m.scale).multiplyScalar(1 + thickness);
+    m.parent!.add(outline);
+  }
 }
 
 export function createPawn(mats: PieceMaterials, color: "w" | "b"): THREE.Group {
@@ -122,19 +159,19 @@ export function createBishop(mats: PieceMaterials, color: "w" | "b"): THREE.Grou
   const body = mesh(lathe(profile), mat);
   g.add(body);
 
-  const mitre = mesh(new THREE.SphereGeometry(0.115, 24, 20), mat);
-  mitre.scale.set(1, 1.3, 1);
-  mitre.position.y = 1.08;
+  // thin spire-shaped mitre, tapering to a sharp point
+  const mitre = mesh(new THREE.ConeGeometry(0.095, 0.4, 28), mat);
+  mitre.position.y = 1.18;
   g.add(mitre);
 
-  // the classic diagonal mitre slit
-  const slit = mesh(new THREE.BoxGeometry(0.2, 0.05, 0.05), mat);
-  slit.position.y = 1.16;
+  // the classic diagonal mitre slit, low on the spire
+  const slit = mesh(new THREE.BoxGeometry(0.17, 0.045, 0.045), mat);
+  slit.position.y = 1.08;
   slit.rotation.z = Math.PI / 5;
   g.add(slit);
 
-  const finial = mesh(new THREE.SphereGeometry(0.045, 16, 16), mat);
-  finial.position.y = 1.24;
+  const finial = mesh(new THREE.SphereGeometry(0.032, 16, 16), mat);
+  finial.position.y = 1.39;
   g.add(finial);
   return g;
 }

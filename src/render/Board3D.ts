@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { buildBoard } from "./board";
-import { createMaterials, PIECE_FACTORIES, type PieceMaterials } from "./pieceModels";
+import { createMaterials, PIECE_FACTORIES, addOutline, type PieceMaterials } from "./pieceModels";
 import { squareToWorld, worldToSquare } from "./coords";
 import { createSelectMarker, createLegalDot, createLastMoveMarker, CheckGlow, ConfettiSystem } from "./effects";
 import type { PieceColor, PieceType } from "../game/types";
@@ -209,6 +209,7 @@ export class Board3D {
   placePiece(square: string, type: PieceType, color: PieceColor) {
     const factory = PIECE_FACTORIES[type];
     const group = factory(this.materials, color);
+    if (color === "b") addOutline(group);
     group.scale.setScalar(0.95);
     const { x, z } = squareToWorld(square);
     group.position.set(x, 0, z);
