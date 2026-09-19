@@ -58,10 +58,11 @@ export type PieceFactory = (mats: PieceMaterials, color: "w" | "b") => THREE.Gro
 
 /**
  * "Inverted hull" outline: a slightly larger, back-face-only copy of every mesh in the group,
- * rendered in a warm highlight color behind the piece so its silhouette reads clearly against
- * a dark background and against other black pieces — without any postprocessing pass.
+ * rendered in a near-black tone just a shade cooler/greyer than the black material itself, so
+ * the silhouette gets a faint soft edge against a dark background without reading as a visible
+ * contrasting ring around the piece.
  */
-export function addOutline(root: THREE.Object3D, color = 0xc9a876, thickness = 0.035) {
+export function addOutline(root: THREE.Object3D, color = 0x413c48, thickness = 0.01) {
   const targets: THREE.Mesh[] = [];
   root.traverse((obj) => {
     if (obj instanceof THREE.Mesh) targets.push(obj);
