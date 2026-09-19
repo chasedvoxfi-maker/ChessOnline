@@ -1,9 +1,11 @@
 import "./style.css";
+import { Chess } from "chess.js";
 import { GameController } from "./game/GameController";
 import { OnlineSession } from "./net/OnlineSession";
-import { Menu } from "./ui/Menu";
+import { Menu, type ContinueInfo } from "./ui/Menu";
 import { HUD } from "./ui/HUD";
 import { soundManager } from "./audio/SoundManager";
+import { loadSavedGame, clearSavedGame, type SavedGameState } from "./game/SaveGame";
 import type { Difficulty, GameMode } from "./game/types";
 
 const app = document.getElementById("app")!;
@@ -11,8 +13,22 @@ const app = document.getElementById("app")!;
 let controller: GameController | null = null;
 let activeOnlineSession: OnlineSession | null = null;
 
+const DIFFICULTY_RU: Record<Difficulty, string> = {
+  easy: "Новичок",
+  medium: "Любитель",
+  hard: "Эксперт",
+  master: "Мастер",
+};
+
 function clearApp() {
   app.innerHTML = "";
+}
+
+function describeSavedGame(saved: SavedGameState): ContinueInfo {
+  const chess = new Chess(saved.fen);
+  const modeLabel = saved.mode === "ai" ? `С компьютером · ${DIFFICULTY_RU[saved.difficulty ?? "medium"]}` : "Два игрока за экраном";
+  const turnLabel = chess.turn() === "w" ? "ход белых" : "ход чёрных";
+  return { label: `${modeLabel} · ${turnLabel}` };
 }
 
 function showMenu() {
@@ -26,26 +42,35 @@ function showMenu() {
   }
   clearApp();
 
-  const menu = new Menu({
-    onStartHotseat: () => startGame({ mode: "hotseat" }),
-    onStartAI: (difficulty: Difficulty) => startGame({ mode: "ai", difficulty }),
-    onHostOnline: async () => {
-      const session = new OnlineSession();
-      activeOnlineSession = session;
-      const code = await session.hostGame();
-      session.on("connected", () => {
-        if (activeOnlineSession === session) startGame({ mode: "online", online: session });
-      });
-      return code;
+  const saved = loadSavedGame();
+
+  const menu = new Menu(
+    {
+      onStartHotseat: () => startGame({ mode: "hotseat" }),
+      onStartAI: (difficulty: Difficulty) => startGame({ mode: "ai", difficulty }),
+      onHostOnline: async () => {
+        const session = new OnlineSession();
+        activeOnlineSession = session;
+        const code = await session.hostGame();
+        session.on("connected", () => {
+          if (activeOnlineSession === session) startGame({ mode: "online", online: session });
+        });
+        return code;
+      },
+      onJoinOnline: async (code: string) => {
+        const session = new OnlineSession();
+        activeOnlineSession = session;
+        await session.joinGame(code);
+        startGame({ mode: "online", online: session });
+      },
+      onOnlineReady: () => {},
+      onContinue: () => {
+        if (saved) startGame({ mode: saved.mode, difficulty: saved.difficulty, resume: saved });
+      },
+      onDiscardSave: () => clearSavedGame(),
     },
-    onJoinOnline: async (code: string) => {
-      const session = new OnlineSession();
-      activeOnlineSession = session;
-      await session.joinGame(code);
-      startGame({ mode: "online", online: session });
-    },
-    onOnlineReady: () => {},
-  });
+    saved ? describeSavedGame(saved) : null,
+  );
   app.appendChild(menu.el);
 }
 
@@ -53,6 +78,7 @@ interface StartOpts {
   mode: GameMode;
   difficulty?: Difficulty;
   online?: OnlineSession;
+  resume?: SavedGameState;
 }
 
 function startGame(opts: StartOpts) {
@@ -69,6 +95,7 @@ function startGame(opts: StartOpts) {
     mode: opts.mode,
     difficulty: opts.difficulty,
     online: opts.online,
+    resume: opts.resume,
   });
 
   const hud = new HUD(
@@ -81,8 +108,9 @@ function startGame(opts: StartOpts) {
       onMenu: () => showMenu(),
       onRematch: () => controller?.restart(),
       onMuteToggle: () => {},
+      onSave: () => controller?.saveNow() ?? false,
     },
-    { hotseat: opts.mode === "hotseat" },
+    { hotseat: opts.mode === "hotseat", saveable: opts.mode !== "online" },
   );
   screen.appendChild(hud.el);
 
@@ -97,8 +125,16 @@ function startGame(opts: StartOpts) {
     onOpponentDisconnected: () => hud.showDisconnectNotice(),
   };
 
-  hud.setTurn("w", false);
-  soundManager.playGameStart();
+  if (opts.resume) {
+    hud.updateCaptured([
+      ...opts.resume.capturedByWhite.map((type) => ({ type, color: "b" as const })),
+      ...opts.resume.capturedByBlack.map((type) => ({ type, color: "w" as const })),
+    ]);
+    hud.setTurn(controller.game.turn, controller.game.inCheck());
+  } else {
+    hud.setTurn("w", false);
+    soundManager.playGameStart();
+  }
 }
 
 showMenu();

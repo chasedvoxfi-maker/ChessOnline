@@ -3,12 +3,15 @@ import { Board3D } from "../render/Board3D";
 import { AIPlayer } from "./AIPlayer";
 import { OnlineSession } from "../net/OnlineSession";
 import { soundManager } from "../audio/SoundManager";
+import { saveGame, clearSavedGame, type SavedGameState } from "./SaveGame";
 import type { Difficulty, GameMode, GameOverInfo, MoveResult, PieceColor, PieceType } from "./types";
 
 export interface GameControllerOptions {
   mode: GameMode;
   difficulty?: Difficulty;
   online?: OnlineSession;
+  /** Resumes a previously saved hotseat/AI game instead of starting from the initial position. */
+  resume?: SavedGameState;
 }
 
 export interface GameControllerCallbacks {
@@ -26,6 +29,7 @@ export class GameController {
   private ai: AIPlayer | null = null;
   private online: OnlineSession | null = null;
   private mode: GameMode;
+  private difficulty?: Difficulty;
   private selected: string | null = null;
   private capturedByWhite: PieceType[] = []; // pieces white has captured (i.e. black pieces taken)
   private capturedByBlack: PieceType[] = [];
@@ -37,6 +41,7 @@ export class GameController {
 
   constructor(container: HTMLElement, opts: GameControllerOptions) {
     this.mode = opts.mode;
+    this.difficulty = opts.difficulty;
     this.board = new Board3D(container);
     this.board.onSquareClick = (sq) => this.handleSquareClick(sq);
 
@@ -54,11 +59,44 @@ export class GameController {
       this.board.setOrientation("w");
     }
 
+    if (opts.resume) {
+      this.game.loadFen(opts.resume.fen);
+      this.capturedByWhite = [...opts.resume.capturedByWhite];
+      this.capturedByBlack = [...opts.resume.capturedByBlack];
+      if (this.mode === "hotseat") this.board.setOrientation(this.game.turn);
+    }
+
     this.syncBoard();
+
+    if (opts.resume && this.mode === "ai" && this.game.turn !== this.localHumanColor) {
+      void this.runAITurn();
+    }
   }
 
   setDifficulty(d: Difficulty) {
+    this.difficulty = d;
     this.ai?.setDifficulty(d);
+  }
+
+  /** Persists the current position so it can be resumed later. No-op (returns false) for online games. */
+  saveNow(): boolean {
+    const state = this.buildSaveState();
+    if (!state) return false;
+    saveGame(state);
+    return true;
+  }
+
+  private buildSaveState(): SavedGameState | null {
+    if (this.mode !== "hotseat" && this.mode !== "ai") return null;
+    if (this.gameOver) return null;
+    return {
+      mode: this.mode,
+      difficulty: this.difficulty,
+      fen: this.game.fen(),
+      capturedByWhite: [...this.capturedByWhite],
+      capturedByBlack: [...this.capturedByBlack],
+      savedAt: Date.now(),
+    };
   }
 
   private syncBoard() {
@@ -199,6 +237,7 @@ export class GameController {
 
     if (result.isCheckmate) {
       this.gameOver = true;
+      this.clearSaveIfOwned();
       this.board.showCheck(this.game.kingSquare(result.color === "w" ? "b" : "w")!);
       soundManager.playCheckmate(result.color);
       const loserKing = this.game.kingSquare(result.color === "w" ? "b" : "w")!;
@@ -209,6 +248,7 @@ export class GameController {
     }
     if (result.isStalemate || result.isDraw) {
       this.gameOver = true;
+      this.clearSaveIfOwned();
       soundManager.playDraw();
       this.callbacks.onGameOver?.({ winner: null, reason: result.isStalemate ? "stalemate" : "draw" });
       return;
@@ -223,12 +263,18 @@ export class GameController {
     }
 
     this.callbacks.onTurnChange?.(this.game.turn);
+    this.autosave();
 
     if (this.mode === "hotseat") {
       this.board.flipTo(this.game.turn);
     } else if (this.mode === "ai" && this.game.turn !== this.localHumanColor) {
       void this.runAITurn();
     }
+  }
+
+  private autosave() {
+    const state = this.buildSaveState();
+    if (state) saveGame(state);
   }
 
   private capturedSummary() {
@@ -260,10 +306,16 @@ export class GameController {
   resign() {
     if (this.gameOver) return;
     this.gameOver = true;
+    this.clearSaveIfOwned();
     const resigningColor = this.mode === "hotseat" ? this.game.turn : this.localHumanColor;
     const winner: PieceColor = resigningColor === "w" ? "b" : "w";
     if (this.mode === "online") this.online?.send({ kind: "resign" });
     this.callbacks.onGameOver?.({ winner, reason: "resign" });
+  }
+
+  /** Clears the shared save slot, but only when this controller's own mode owns it (never touches a hotseat/AI save from an unrelated online session). */
+  private clearSaveIfOwned() {
+    if (this.mode === "hotseat" || this.mode === "ai") clearSavedGame();
   }
 
   restart() {

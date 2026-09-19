@@ -7,6 +7,13 @@ export interface MenuCallbacks {
   onHostOnline: () => Promise<string>; // resolves with room code, rejects with error string
   onJoinOnline: (code: string) => Promise<void>;
   onOnlineReady: () => void; // called once the opponent has connected and the game should start
+  onContinue: () => void;
+  onDiscardSave: () => void;
+}
+
+export interface ContinueInfo {
+  /** Short human-readable description, e.g. "Игра с компьютером · Ход белых". */
+  label: string;
 }
 
 
@@ -23,9 +30,11 @@ export class Menu {
   private contentEl: HTMLDivElement;
   private cancelledOnlineWait = false;
   private callbacks: MenuCallbacks;
+  private continueInfo: ContinueInfo | null;
 
-  constructor(callbacks: MenuCallbacks) {
+  constructor(callbacks: MenuCallbacks, continueInfo: ContinueInfo | null = null) {
     this.callbacks = callbacks;
+    this.continueInfo = continueInfo;
     this.el = document.createElement("div");
     this.el.className = "menu-screen";
     this.el.innerHTML = `
@@ -56,6 +65,21 @@ export class Menu {
     this.contentEl.innerHTML = `
       <h1 class="game-title">Chess Online</h1>
       <p class="game-subtitle">Королевская игра в трёх измерениях</p>
+      ${
+        this.continueInfo
+          ? `
+      <div class="menu-panel continue-panel">
+        <button class="menu-btn continue-btn" data-action="continue">
+          <span class="icon">▶️</span>
+          <span>
+            Продолжить игру
+            <span class="desc">${this.continueInfo.label}</span>
+          </span>
+        </button>
+        <button class="back-btn" data-action="discard-save">Начать новую игру, удалив сохранённую</button>
+      </div>`
+          : ""
+      }
       <div class="menu-panel">
         <button class="menu-btn" data-action="hotseat">
           <span class="icon">🎭</span>
@@ -80,6 +104,16 @@ export class Menu {
         </button>
       </div>
     `;
+    this.contentEl.querySelector('[data-action="continue"]')?.addEventListener("click", () => {
+      this.unlockAudio();
+      soundManager.playSelect();
+      this.callbacks.onContinue();
+    });
+    this.contentEl.querySelector('[data-action="discard-save"]')?.addEventListener("click", () => {
+      this.continueInfo = null;
+      this.callbacks.onDiscardSave();
+      this.renderRoot();
+    });
     this.contentEl.querySelector('[data-action="hotseat"]')!.addEventListener("click", () => {
       this.unlockAudio();
       soundManager.playSelect();

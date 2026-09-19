@@ -15,6 +15,8 @@ export interface HUDCallbacks {
   onMenu: () => void;
   onRematch: () => void;
   onMuteToggle: (muted: boolean) => void;
+  /** Persists the current game so it can be resumed later. Returns false if this game can't be saved (online). */
+  onSave: () => boolean;
 }
 
 export class HUD {
@@ -22,7 +24,7 @@ export class HUD {
   private isHotseat: boolean;
   private callbacks: HUDCallbacks;
 
-  constructor(callbacks: HUDCallbacks, opts: { hotseat: boolean }) {
+  constructor(callbacks: HUDCallbacks, opts: { hotseat: boolean; saveable: boolean }) {
     this.callbacks = callbacks;
     this.isHotseat = opts.hotseat;
     this.el = document.createElement("div");
@@ -34,6 +36,7 @@ export class HUD {
           <div class="turn-label"><span class="turn-label-text">Ход белых</span><small class="turn-hint"></small></div>
         </div>
         <div class="hud-actions">
+          ${opts.saveable ? '<button class="icon-btn" data-action="save" title="Сохранить игру">💾</button>' : ""}
           <button class="icon-btn" data-action="draw" title="Ничья">🤝</button>
           <button class="icon-btn" data-action="resign" title="Сдаться">🏳️</button>
           <button class="icon-btn" data-action="mute" title="Звук">🔊</button>
@@ -51,6 +54,7 @@ export class HUD {
     this.el.querySelector('[data-action="menu"]')!.addEventListener("click", () => this.callbacks.onMenu());
     this.el.querySelector('[data-action="resign"]')!.addEventListener("click", () => this.confirmResign());
     this.el.querySelector('[data-action="draw"]')!.addEventListener("click", () => this.callbacks.onOfferDraw?.());
+    this.el.querySelector('[data-action="save"]')?.addEventListener("click", () => this.handleSave());
 
     let muted = false;
     const muteBtn = this.el.querySelector<HTMLButtonElement>('[data-action="mute"]')!;
@@ -60,6 +64,18 @@ export class HUD {
       soundManager.setMuted(muted);
       this.callbacks.onMuteToggle(muted);
     });
+  }
+
+  private handleSave() {
+    const btn = this.el.querySelector<HTMLButtonElement>('[data-action="save"]')!;
+    const ok = this.callbacks.onSave();
+    soundManager.playSelect();
+    btn.textContent = ok ? "✅" : "🚫";
+    btn.disabled = true;
+    setTimeout(() => {
+      btn.textContent = "💾";
+      btn.disabled = false;
+    }, 1200);
   }
 
   private confirmResign() {

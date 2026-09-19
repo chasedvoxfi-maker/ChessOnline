@@ -202,6 +202,21 @@ button {
   transform: translateY(0);
 }
 
+.continue-panel {
+  padding-bottom: 0.9rem;
+}
+.continue-btn {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, rgba(212, 175, 106, 0.2), rgba(212, 175, 106, 0.04));
+  box-shadow: 0 10px 26px rgba(212, 175, 106, 0.16);
+}
+.continue-panel .back-btn {
+  width: 100%;
+  text-align: center;
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+}
+
 .back-btn {
   align-self: flex-start;
   background: none;
