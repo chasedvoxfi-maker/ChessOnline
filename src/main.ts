@@ -207,7 +207,7 @@ function startCornersGame(boardContainer: HTMLElement, screen: HTMLElement, opts
   const ctrl = new CornersController(boardContainer, {
     mode: opts.mode,
     difficulty: opts.difficulty,
-    formation: opts.formation ?? "triangle",
+    formation: opts.formation ?? "rectangle",
     online: opts.online,
     resume: opts.resume,
   });

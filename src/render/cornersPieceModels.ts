@@ -1,7 +1,7 @@
-import { createPawn } from "./pieceModels";
+import { createCheckerMan } from "./checkerPieceModels";
 import type { PieceFactory } from "./meshHelpers";
 
-/** Corners (Уголки) uses plain pegs — the same pawn silhouette as chess, since every piece moves identically. */
+/** Corners (Уголки) uses plain checker-style discs — every piece moves identically, no kings. */
 export const CORNERS_FACTORIES: Record<string, PieceFactory> = {
-  p: createPawn,
+  p: createCheckerMan,
 };

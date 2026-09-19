@@ -156,21 +156,81 @@ export class Board3D {
   };
 
   /**
+   * Points (in board-local world space) the camera must keep in frame: the 8x8 board plane's
+   * own corners edge-to-edge (the actual "whole board must fit" requirement), plus modest
+   * headroom for a corner piece's height and for a tall center-file piece (king/queen) at the
+   * back rank — generous enough to cover chess, checkers and Corners' rectangle formation
+   * (which fills every square in each corner, right up to the board edge).
+   */
+  private static readonly FRAMING_POINTS: [number, number, number][] = [
+    [-4, 0, -4], [4, 0, -4], [-4, 0, 4], [4, 0, 4],
+    [-4, 0.5, -4], [4, 0.5, -4], [-4, 0.5, 4], [4, 0.5, 4],
+    [-0.5, 1.3, -4], [0.5, 1.3, -4], [-0.5, 1.3, 4], [0.5, 1.3, 4],
+  ];
+
+  /**
+   * The FOV that keeps every FRAMING_POINT inside the frustum for the camera's current
+   * position/look-at and the given screen aspect, plus a small safety margin. Computed
+   * analytically (not hand-tuned per device) so it's correct for any aspect ratio and stays
+   * correct if the piece models or board size ever change.
+   */
+  private computeRequiredFov(aspect: number): number {
+    const Cx = 0;
+    const Cy = this.camHeight;
+    const Cz = this.camRadius;
+    let fx = 0 - Cx;
+    let fy = this.camLookY - Cy;
+    let fz = 0 - Cz;
+    const flen = Math.hypot(fx, fy, fz);
+    fx /= flen;
+    fy /= flen;
+    fz /= flen;
+    // right = normalize(cross(forward, worldUp)); camera is always aimed along x=0, so this
+    // reduces to (-fz, 0, fx) exactly (no roll).
+    let rx = -fz;
+    let rz = fx;
+    const rlen = Math.hypot(rx, rz) || 1;
+    rx /= rlen;
+    rz /= rlen;
+    // up = cross(right, forward)
+    const ux = 0 * fz - rz * fy;
+    const uy = rz * fx - rx * fz;
+    const uz = rx * fy - 0 * fx;
+
+    const marginRad = (2 * Math.PI) / 180;
+    let maxH = 0;
+    let maxV = 0;
+    for (const [px, py, pz] of Board3D.FRAMING_POINTS) {
+      const vx = px - Cx;
+      const vy = py - Cy;
+      const vz = pz - Cz;
+      const fwd = vx * fx + vy * fy + vz * fz;
+      const right = vx * rx + vz * rz;
+      const up = vx * ux + vy * uy + vz * uz;
+      maxH = Math.max(maxH, Math.abs(Math.atan2(right, fwd)));
+      maxV = Math.max(maxV, Math.abs(Math.atan2(up, fwd)));
+    }
+
+    const neededHalfV = maxV + marginRad;
+    const neededHalfVFromH = Math.atan(Math.tan(maxH + marginRad) / aspect);
+    const halfV = Math.max(neededHalfV, neededHalfVFromH);
+    return Math.min(115, (halfV * 2 * 180) / Math.PI);
+  }
+
+  /**
    * Reframes the camera so the board reads as large as possible on small screens, near edge
-   * included. Portrait phones are narrow (low aspect) and need a *wider* FOV pulled back
-   * slightly, or the side files get cropped. Landscape phones are merely short (low pixel
-   * height despite a wide aspect) and need the opposite: a *tighter* FOV pulled in, so the
-   * board's vertical extent fills more of the limited height instead of leaving it framed
-   * like a desktop window with empty margins above and below.
+   * included, while guaranteeing the whole board actually fits on screen at any aspect ratio.
+   * Portrait phones (narrow) are pulled back a bit so the wide FOV that requires doesn't get
+   * absurdly fisheye-distorted; the FOV itself is then solved analytically, not guessed.
    */
   private applyResponsiveFraming(aspect: number, height: number) {
     const portraitness = Math.max(0, Math.min(1, 1 - aspect)); // 0 on wide screens, up to ~1 on tall phones
     const shortScreen = aspect > 1.15 ? Math.max(0, Math.min(1, (560 - height) / 340)) : 0; // 0 at h>=560, 1 at h<=220
 
-    this.camera.fov = 50 + portraitness * 46 - shortScreen * 10;
-    this.camRadius = 7.4 - portraitness * 1.4 - shortScreen * 1.4;
-    this.camHeight = this.camRadius * (6.4 / 7.4);
-    this.camLookY = 0.35 - portraitness * 0.25 + shortScreen * 0.22;
+    this.camRadius = 7.4 + portraitness * 1.2 - shortScreen * 0.8;
+    this.camHeight = this.camRadius * (6.4 / 7.4) + portraitness * 1.4; // steepen the angle a bit on tall phones — a wide board wastes less vertical space viewed from more overhead
+    this.camLookY = 0.35 - portraitness * 0.32 + shortScreen * 0.18;
+    this.camera.fov = this.computeRequiredFov(aspect);
   }
 
   private updateCameraPosition() {

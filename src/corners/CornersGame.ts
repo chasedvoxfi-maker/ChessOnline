@@ -47,19 +47,19 @@ function zoneSquares(formation: CornersFormation): { white: string[]; black: str
   const white: string[] = [];
   const black: string[] = [];
   if (formation === "triangle") {
-    // 4-3-2-1 right triangle, right angle at white's a1 corner, mirrored to black's h8 corner.
+    // 4-3-2-1 right triangle, right angle at white's h1 corner (bottom-right), mirrored to black's a8 corner (top-left).
     for (let rank = 0; rank < 4; rank++) {
       for (let file = 0; file < 4 - rank; file++) {
-        white.push(toSquare(file, rank)!);
-        black.push(toSquare(7 - file, 7 - rank)!);
+        white.push(toSquare(7 - file, rank)!);
+        black.push(toSquare(file, 7 - rank)!);
       }
     }
   } else {
     // rectangle: solid 4x4 block in each corner.
     for (let rank = 0; rank < 4; rank++) {
       for (let file = 0; file < 4; file++) {
-        white.push(toSquare(file, rank)!);
-        black.push(toSquare(7 - file, 7 - rank)!);
+        white.push(toSquare(7 - file, rank)!);
+        black.push(toSquare(file, 7 - rank)!);
       }
     }
   }
@@ -76,13 +76,13 @@ function zoneSquares(formation: CornersFormation): { white: string[]; black: str
 export class CornersGame {
   private board: Board = new Map();
   private turn: PieceColor = "w";
-  private formation: CornersFormation = "triangle";
+  private formation: CornersFormation = "rectangle";
   private homeZoneWhite: Set<string> = new Set();
   private homeZoneBlack: Set<string> = new Set();
   private history: { board: Board; turn: PieceColor }[] = [];
   private gameOverInfo: CornersGameOverInfo | null = null;
 
-  constructor(formation: CornersFormation = "triangle") {
+  constructor(formation: CornersFormation = "rectangle") {
     this.reset(formation);
   }
 

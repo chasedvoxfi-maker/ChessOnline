@@ -77,10 +77,10 @@ button {
     radial-gradient(circle at 75% 75%, rgba(90, 60, 160, 0.28), transparent 55%),
     linear-gradient(160deg, #0d0a18 0%, #171128 45%, #0a0812 100%);
   /* the source art has its own baked-in title/button mockup off to the right — favor the
-     left side (the pieces and blossoms) and blur it into an atmospheric backdrop so the
-     mockup text doesn't visually compete with our own title and buttons */
-  filter: brightness(0.62) saturate(1.05) blur(6px);
-  transform: scale(1.04); /* hides the blur's soft edge fringe at the viewport border */
+     left side (the pieces and blossoms) and darken it so our own title/buttons stay readable,
+     with just enough blur to soften (not hide) the mockup text underneath */
+  filter: brightness(0.8) saturate(1.1) blur(2px);
+  transform: scale(1.02); /* hides the blur's soft edge fringe at the viewport border */
 }
 
 .menu-bg-fallback::before {

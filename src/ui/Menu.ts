@@ -41,7 +41,7 @@ export class Menu {
   private callbacks: MenuCallbacks;
   private continueInfo: Partial<Record<GameKind, ContinueInfo>>;
   private selectedGame: GameKind = "chess";
-  private selectedFormation: CornersFormation = "triangle";
+  private selectedFormation: CornersFormation = "rectangle";
 
   constructor(callbacks: MenuCallbacks, continueInfo: Partial<Record<GameKind, ContinueInfo>> = {}) {
     this.callbacks = callbacks;
@@ -126,7 +126,7 @@ export class Menu {
         this.unlockAudio();
         soundManager.playSelect();
         this.selectedGame = btn.dataset.game as GameKind;
-        this.selectedFormation = "triangle";
+        this.selectedFormation = "rectangle";
         this.renderModeSelect();
       });
     });
@@ -148,8 +148,8 @@ export class Menu {
             ? `
         <h2 class="section-title">Расстановка</h2>
         <div class="online-tabs">
-          <button class="pill-btn ${this.selectedFormation === "triangle" ? "active" : ""}" data-formation="triangle">Треугольником</button>
           <button class="pill-btn ${this.selectedFormation === "rectangle" ? "active" : ""}" data-formation="rectangle">Прямоугольником</button>
+          <button class="pill-btn ${this.selectedFormation === "triangle" ? "active" : ""}" data-formation="triangle">Треугольником</button>
         </div>`
             : ""
         }
