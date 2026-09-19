@@ -72,9 +72,15 @@ button {
 
 .menu-bg-fallback {
   background:
+    url("/ChessOnline/menu-bg.png") 20% center / cover no-repeat,
     radial-gradient(circle at 30% 20%, rgba(212, 175, 106, 0.16), transparent 55%),
     radial-gradient(circle at 75% 75%, rgba(90, 60, 160, 0.28), transparent 55%),
     linear-gradient(160deg, #0d0a18 0%, #171128 45%, #0a0812 100%);
+  /* the source art has its own baked-in title/button mockup off to the right — favor the
+     left side (the pieces and blossoms) and blur it into an atmospheric backdrop so the
+     mockup text doesn't visually compete with our own title and buttons */
+  filter: brightness(0.62) saturate(1.05) blur(6px);
+  transform: scale(1.04); /* hides the blur's soft edge fringe at the viewport border */
 }
 
 .menu-bg-fallback::before {
