@@ -1,0 +1,18 @@
+{
+  "name": "Chess Online",
+  "short_name": "Chess Online",
+  "description": "Шахматы в 3D — на двоих за одним экраном, против компьютера или онлайн",
+  "start_url": "/ChessOnline/",
+  "scope": "/ChessOnline/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0812",
+  "theme_color": "#0a0812",
+  "lang": "ru",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
