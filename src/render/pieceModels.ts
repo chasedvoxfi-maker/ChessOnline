@@ -1,19 +1,15 @@
 import * as THREE from "three";
+import { mesh, pickMat, createMaterials, addOutline, type PieceMaterials, type PieceFactory } from "./meshHelpers";
 
 /** Procedurally modeled Staunton-style chess pieces — no external 3D assets required. */
+
+export { createMaterials, addOutline, type PieceMaterials, type PieceFactory };
 
 function lathe(points: [number, number][], segments = 48): THREE.BufferGeometry {
   const vec2 = points.map(([x, y]) => new THREE.Vector2(x, y));
   const geo = new THREE.LatheGeometry(vec2, segments);
   geo.computeVertexNormals();
   return geo;
-}
-
-function mesh(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
-  const m = new THREE.Mesh(geo, mat);
-  m.castShadow = true;
-  m.receiveShadow = true;
-  return m;
 }
 
 /** Shared round base profile used (at different scales) by every piece for visual unity. */
@@ -25,72 +21,6 @@ function baseProfile(width: number, footHeight: number): [number, number][] {
     [width * 0.82, footHeight * 0.7],
     [width * 0.78, footHeight],
   ];
-}
-
-export interface PieceMaterials {
-  white: THREE.Material;
-  black: THREE.Material;
-}
-
-export function createMaterials(): PieceMaterials {
-  const white = new THREE.MeshPhysicalMaterial({
-    color: 0xf3ecdd,
-    roughness: 0.32,
-    metalness: 0.02,
-    clearcoat: 0.55,
-    clearcoatRoughness: 0.25,
-    reflectivity: 0.4,
-  });
-  const black = new THREE.MeshPhysicalMaterial({
-    color: 0x2a2018,
-    roughness: 0.28,
-    metalness: 0.05,
-    clearcoat: 0.6,
-    clearcoatRoughness: 0.2,
-    reflectivity: 0.5,
-  });
-  // A subtle lighter-toward-the-top gradient, in world space so it reads correctly across
-  // every sub-mesh of a piece (crown spikes, cross finials, ...), not just the main body.
-  black.onBeforeCompile = (shader) => {
-    shader.uniforms.uGradientColor = { value: new THREE.Color(0x5a4632) };
-    shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying float vGradWorldY;")
-      .replace(
-        "#include <begin_vertex>",
-        "#include <begin_vertex>\nvGradWorldY = (modelMatrix * vec4(transformed, 1.0)).y;",
-      );
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying float vGradWorldY;\nuniform vec3 uGradientColor;")
-      .replace(
-        "#include <color_fragment>",
-        "#include <color_fragment>\n  float gradT = clamp(vGradWorldY / 1.3, 0.0, 1.0);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uGradientColor, gradT * 0.5);",
-      );
-  };
-  return { white, black };
-}
-
-function pickMat(mats: PieceMaterials, color: "w" | "b") {
-  return color === "w" ? mats.white : mats.black;
-}
-
-/**
- * "Inverted hull" outline: a slightly larger, back-face-only copy of every mesh in the group,
- * rendered in a warm highlight color behind the piece so its silhouette reads clearly against
- * a dark background and against other black pieces — without any postprocessing pass.
- */
-export function addOutline(root: THREE.Object3D, color = 0xc9a876, thickness = 0.035) {
-  const targets: THREE.Mesh[] = [];
-  root.traverse((obj) => {
-    if (obj instanceof THREE.Mesh) targets.push(obj);
-  });
-  const outlineMat = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
-  for (const m of targets) {
-    const outline = new THREE.Mesh(m.geometry, outlineMat);
-    outline.position.copy(m.position);
-    outline.rotation.copy(m.rotation);
-    outline.scale.copy(m.scale).multiplyScalar(1 + thickness);
-    m.parent!.add(outline);
-  }
 }
 
 export function createPawn(mats: PieceMaterials, color: "w" | "b"): THREE.Group {
@@ -153,25 +83,34 @@ export function createBishop(mats: PieceMaterials, color: "w" | "b"): THREE.Grou
     [0.14, 0.4],
     [0.24, 0.62],
     [0.27, 0.78],
-    [0.14, 0.92],
-    [0.1, 0.98],
+    [0.16, 0.92],
+    [0.12, 0.97],
   ];
   const body = mesh(lathe(profile), mat);
   g.add(body);
 
-  // thin spire-shaped mitre, tapering to a sharp point
-  const mitre = mesh(new THREE.ConeGeometry(0.095, 0.4, 28), mat);
-  mitre.position.y = 1.18;
+  // classic bulbous "flame" mitre — bulges out from the collar, then rounds to a point,
+  // lathed (not a straight cone) so it reads solid and curved from every angle.
+  const mitreProfile: [number, number][] = [
+    [0.12, 0.0],
+    [0.18, 0.08],
+    [0.175, 0.18],
+    [0.13, 0.3],
+    [0.06, 0.4],
+    [0.0, 0.47],
+  ];
+  const mitre = mesh(lathe(mitreProfile), mat);
+  mitre.position.y = 0.97;
   g.add(mitre);
 
-  // the classic diagonal mitre slit, low on the spire
-  const slit = mesh(new THREE.BoxGeometry(0.17, 0.045, 0.045), mat);
-  slit.position.y = 1.08;
+  // the classic diagonal mitre slit, cut across the widest part of the dome
+  const slit = mesh(new THREE.BoxGeometry(0.21, 0.05, 0.05), mat);
+  slit.position.y = 0.97 + 0.15;
   slit.rotation.z = Math.PI / 5;
   g.add(slit);
 
-  const finial = mesh(new THREE.SphereGeometry(0.032, 16, 16), mat);
-  finial.position.y = 1.39;
+  const finial = mesh(new THREE.SphereGeometry(0.045, 16, 16), mat);
+  finial.position.y = 0.97 + 0.47 + 0.025;
   g.add(finial);
   return g;
 }
@@ -182,39 +121,103 @@ export function createKnight(mats: PieceMaterials, color: "w" | "b"): THREE.Grou
   const baseGeo = lathe([...baseProfile(0.36, 0.14), [0.2, 0.2], [0.19, 0.34]]);
   g.add(mesh(baseGeo, mat));
 
-  // horse-head silhouette (facing +x), extruded — alternating convex/concave curves (neck,
-  // mane, ear, temple, forehead, nose bridge, nose, mouth, chin, throat) read clearly as equine.
+  // horse-head silhouette (facing +x), extruded with modest depth so it reads as a rounded
+  // head rather than a paper-thin card. One continuous curve carries the poll down through
+  // the forehead to the nose point — earlier drafts stacked several separate convex/concave
+  // "lobes" (temple dip, forehead bulge, bridge dip) which, once extruded with any real depth,
+  // each grew their own flat side wall and made the head read as a stack of shelves instead of
+  // a head. The ears are built separately in 3D below (not baked into this flat profile) so
+  // they stick out and splay apart instead of lying coplanar with the face.
   const shape = new THREE.Shape();
   shape.moveTo(-0.19, 0.0); // chest/base, back-left — matches the base cylinder's top radius
   shape.lineTo(-0.19, 0.3); // straight up the back of the neck
   shape.quadraticCurveTo(-0.17, 0.48, -0.08, 0.56); // neck sweeps forward into the poll
-  shape.quadraticCurveTo(-0.1, 0.64, -0.06, 0.7); // mane bump
-  shape.lineTo(-0.02, 0.74); // up to the ear's back edge
-  shape.lineTo(0.04, 0.92); // ear tip
-  shape.lineTo(0.09, 0.72); // ear front, back down
-  shape.quadraticCurveTo(0.1, 0.62, 0.06, 0.56); // temple dip (concave)
-  shape.quadraticCurveTo(0.14, 0.54, 0.22, 0.46); // forehead bulge (convex)
-  shape.quadraticCurveTo(0.2, 0.4, 0.16, 0.38); // bridge dip (concave)
-  shape.quadraticCurveTo(0.28, 0.36, 0.36, 0.26); // nose (strongest forward point)
+  shape.quadraticCurveTo(-0.09, 0.68, -0.01, 0.74); // poll rounds up and over the top of the head
+  shape.quadraticCurveTo(0.06, 0.78, 0.12, 0.7); // crown eases down toward the forehead
+  shape.quadraticCurveTo(0.17, 0.62, 0.15, 0.52); // shallow bridge notch (concave) — the classic knight profile dip
+  shape.quadraticCurveTo(0.25, 0.42, 0.36, 0.26); // nose bridge sweeps out to the nose point
   shape.quadraticCurveTo(0.3, 0.2, 0.22, 0.2); // mouth (concave, under the nose)
   shape.lineTo(0.14, 0.12); // chin
   shape.quadraticCurveTo(0.04, 0.06, -0.05, 0.08); // throat curve
   shape.lineTo(-0.19, 0.08); // chest, back to the base width
   shape.lineTo(-0.19, 0.0); // close, flush with the base
 
+  const depth = 0.22;
   const extrude = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.19,
+    depth,
     bevelEnabled: true,
-    bevelThickness: 0.016,
-    bevelSize: 0.012,
+    bevelThickness: 0.018,
+    bevelSize: 0.014,
     bevelSegments: 3,
-    curveSegments: 14,
+    curveSegments: 24,
   });
-  extrude.center();
+  // capture the pre-center bounding box so ears/nose/eye (specified in the shape's own
+  // coordinate space above) can be placed precisely once the geometry is recentered.
+  extrude.computeBoundingBox();
+  const bbox = extrude.boundingBox!;
+  const cx = (bbox.min.x + bbox.max.x) / 2;
+  const cy = (bbox.min.y + bbox.max.y) / 2;
+  const cz = (bbox.min.z + bbox.max.z) / 2;
+  extrude.translate(-cx, -cy, -cz);
   extrude.computeVertexNormals();
   const head = mesh(extrude, mat);
-  head.position.set(0.01, 0.54, 0);
+  const anchor = { x: 0.01, y: 0.54, z: 0 };
+  head.position.set(anchor.x, anchor.y, anchor.z);
   g.add(head);
+
+  // maps a point given in the shape's original 2D coordinate space to its final world position
+  const toWorld = (x: number, y: number, z = 0): [number, number, number] => [
+    anchor.x + (x - cx),
+    anchor.y + (y - cy),
+    anchor.z + (z - cz),
+  ];
+
+  // two 3D ears (flattened low-poly cones), splayed outward and tilted forward so the head
+  // reads correctly from the side, not just face-on
+  const earGeo = new THREE.ConeGeometry(0.06, 0.24, 4, 1);
+  earGeo.scale(1, 1, 0.42);
+  const earSide = depth * 0.3;
+  const [earX, earY] = toWorld(0.01, 0.78);
+  for (const side of [1, -1]) {
+    const ear = mesh(earGeo.clone(), mat);
+    ear.position.set(earX, earY, side * earSide);
+    ear.rotation.x = -0.32;
+    ear.rotation.z = side * 0.32;
+    g.add(ear);
+  }
+
+  // a snout bump (embedded slightly behind the profile's nose tip so it reads as a continuation
+  // of the muzzle rather than a floating ball) and two eye bumps add roundness beyond the flat profile
+  const [noseX, noseY, noseZ] = toWorld(0.32, 0.25, depth / 2);
+  const nose = mesh(new THREE.SphereGeometry(0.075, 16, 14), mat);
+  nose.scale.set(1.3, 0.85, 0.85);
+  nose.position.set(noseX, noseY, noseZ);
+  g.add(nose);
+
+  for (const side of [1, -1]) {
+    const [eyeX, eyeY, eyeZ] = toWorld(0.18, 0.5, depth / 2 + side * depth * 0.24);
+    const eye = mesh(new THREE.SphereGeometry(0.028, 10, 10), mat);
+    eye.position.set(eyeX, eyeY, eyeZ);
+    g.add(eye);
+  }
+
+  // a short row of mane tufts along the back of the neck, like the reference photo's sawtooth mane
+  const maneGeo = new THREE.ConeGeometry(0.028, 0.09, 4, 1);
+  maneGeo.scale(1, 1, 0.5);
+  const manePositions: [number, number][] = [
+    [-0.17, 0.34],
+    [-0.14, 0.42],
+    [-0.1, 0.49],
+    [-0.05, 0.56],
+  ];
+  for (const [mx, my] of manePositions) {
+    const [wx, wy, wz] = toWorld(mx, my, depth / 2);
+    const tuft = mesh(maneGeo.clone(), mat);
+    tuft.position.set(wx, wy, wz);
+    tuft.rotation.z = Math.PI * 0.62;
+    g.add(tuft);
+  }
+
   return g;
 }
 
@@ -287,8 +290,6 @@ export function createKing(mats: PieceMaterials, color: "w" | "b"): THREE.Group 
   g.add(crossH);
   return g;
 }
-
-export type PieceFactory = (mats: PieceMaterials, color: "w" | "b") => THREE.Group;
 
 export const PIECE_FACTORIES: Record<string, PieceFactory> = {
   p: createPawn,
