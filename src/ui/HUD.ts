@@ -1,11 +1,14 @@
 import type { GameOverInfo, PieceColor, PieceType } from "../game/types";
 import { soundManager } from "../audio/SoundManager";
 
-const WHITE_GLYPHS: Record<PieceType, string> = { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" };
-const BLACK_GLYPHS: Record<PieceType, string> = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
-const PIECE_VALUE: Record<PieceType, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+/** "m" (checkers man) is the only non-chess type shown in the captured tray — Corners has no captures. */
+export type CapturedGlyphType = PieceType | "m";
 
-function glyph(type: PieceType, color: PieceColor) {
+const WHITE_GLYPHS: Record<CapturedGlyphType, string> = { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙", m: "⛀" };
+const BLACK_GLYPHS: Record<CapturedGlyphType, string> = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟", m: "⛂" };
+const PIECE_VALUE: Record<CapturedGlyphType, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0, m: 1 };
+
+function glyph(type: CapturedGlyphType, color: PieceColor) {
   return color === "w" ? WHITE_GLYPHS[type] : BLACK_GLYPHS[type];
 }
 
@@ -156,12 +159,12 @@ export class HUD {
     this.el.querySelector(".check-banner")!.classList.toggle("hidden", !inCheck);
   }
 
-  updateCaptured(captured: { type: PieceType; color: PieceColor }[]) {
+  updateCaptured(captured: { type: CapturedGlyphType; color: PieceColor }[]) {
     const whiteTray = this.el.querySelector('[data-tray="w"]')!; // pieces captured BY white (black pieces)
     const blackTray = this.el.querySelector('[data-tray="b"]')!;
     const byWhite = captured.filter((c) => c.color === "b");
     const byBlack = captured.filter((c) => c.color === "w");
-    const render = (list: { type: PieceType; color: PieceColor }[]) => {
+    const render = (list: { type: CapturedGlyphType; color: PieceColor }[]) => {
       const sorted = [...list].sort((a, b) => PIECE_VALUE[b.type] - PIECE_VALUE[a.type]);
       return sorted.map((c) => glyph(c.type, c.color)).join(" ");
     };

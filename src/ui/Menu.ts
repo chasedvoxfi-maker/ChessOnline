@@ -1,21 +1,22 @@
 import type { Difficulty } from "../game/types";
+import type { GameKind } from "../game/SaveGame";
+import type { CornersFormation } from "../corners/CornersGame";
 import { soundManager } from "../audio/SoundManager";
 
 export interface MenuCallbacks {
-  onStartHotseat: () => void;
-  onStartAI: (difficulty: Difficulty) => void;
-  onHostOnline: () => Promise<string>; // resolves with room code, rejects with error string
+  onStartHotseat: (game: GameKind, formation?: CornersFormation) => void;
+  onStartAI: (game: GameKind, difficulty: Difficulty, formation?: CornersFormation) => void;
+  onHostOnline: (game: GameKind, formation?: CornersFormation) => Promise<string>; // resolves with room code, rejects with error string
+  /** The joined game is announced by the host once connected — the caller doesn't pick it up front. */
   onJoinOnline: (code: string) => Promise<void>;
-  onOnlineReady: () => void; // called once the opponent has connected and the game should start
-  onContinue: () => void;
-  onDiscardSave: () => void;
+  onContinue: (game: GameKind) => void;
+  onDiscardSave: (game: GameKind) => void;
 }
 
 export interface ContinueInfo {
   /** Short human-readable description, e.g. "Игра с компьютером · Ход белых". */
   label: string;
 }
-
 
 const DIFFICULTY_LABELS: { value: Difficulty; label: string; desc: string }[] = [
   { value: "easy", label: "Новичок", desc: "для расслабленной игры" },
@@ -24,15 +25,25 @@ const DIFFICULTY_LABELS: { value: Difficulty; label: string; desc: string }[] = 
   { value: "master", label: "Мастер", desc: "считает глубоко" },
 ];
 
-/** The main menu screen: mode selection, AI difficulty, and the online host/join lobby. */
+const GAME_LABELS: { value: GameKind; icon: string; label: string; desc: string }[] = [
+  { value: "chess", icon: "♞", label: "Шахматы", desc: "классическая королевская игра" },
+  { value: "checkers", icon: "⛀", label: "Шашки", desc: "с обязательным взятием и дамками" },
+  { value: "corners", icon: "🔺", label: "Уголки", desc: "переведите все фишки в дальний угол" },
+];
+
+const GAME_TITLES: Record<GameKind, string> = { chess: "Шахматы", checkers: "Шашки", corners: "Уголки" };
+
+/** The main menu screen: game picker, mode selection, AI difficulty, and the online host/join lobby. */
 export class Menu {
   el: HTMLDivElement;
   private contentEl: HTMLDivElement;
   private cancelledOnlineWait = false;
   private callbacks: MenuCallbacks;
-  private continueInfo: ContinueInfo | null;
+  private continueInfo: Partial<Record<GameKind, ContinueInfo>>;
+  private selectedGame: GameKind = "chess";
+  private selectedFormation: CornersFormation = "triangle";
 
-  constructor(callbacks: MenuCallbacks, continueInfo: ContinueInfo | null = null) {
+  constructor(callbacks: MenuCallbacks, continueInfo: Partial<Record<GameKind, ContinueInfo>> = {}) {
     this.callbacks = callbacks;
     this.continueInfo = continueInfo;
     this.el = document.createElement("div");
@@ -44,7 +55,7 @@ export class Menu {
       <div class="menu-content"></div>
     `;
     this.contentEl = this.el.querySelector(".menu-content")!;
-    this.renderRoot();
+    this.renderGamePicker();
 
     const video = this.el.querySelector<HTMLVideoElement>(".menu-bg-video")!;
     void video; // Hook for a future background video: set video.src = "/menu-bg.mp4" and remove "hidden".
@@ -61,26 +72,87 @@ export class Menu {
     soundManager.unlock();
   }
 
-  private renderRoot() {
-    this.contentEl.innerHTML = `
-      <h1 class="game-title">Chess Online</h1>
-      <p class="game-subtitle">Королевская игра в трёх измерениях</p>
-      ${
-        this.continueInfo
-          ? `
+  private renderGamePicker() {
+    const continuePanels = GAME_LABELS.filter((g) => this.continueInfo[g.value]).map(
+      (g) => `
       <div class="menu-panel continue-panel">
-        <button class="menu-btn continue-btn" data-action="continue">
+        <button class="menu-btn continue-btn" data-continue="${g.value}">
           <span class="icon">▶️</span>
           <span>
-            Продолжить игру
-            <span class="desc">${this.continueInfo.label}</span>
+            Продолжить: ${GAME_TITLES[g.value]}
+            <span class="desc">${this.continueInfo[g.value]!.label}</span>
           </span>
         </button>
-        <button class="back-btn" data-action="discard-save">Начать новую игру, удалив сохранённую</button>
-      </div>`
-          : ""
-      }
+        <button class="back-btn" data-discard="${g.value}">Начать новую игру, удалив сохранённую</button>
+      </div>`,
+    );
+
+    this.contentEl.innerHTML = `
+      <h1 class="game-title">Chess Online</h1>
+      <p class="game-subtitle">Три классические игры в трёх измерениях</p>
+      ${continuePanels.join("")}
       <div class="menu-panel">
+        ${GAME_LABELS.map(
+          (g) => `
+          <button class="menu-btn" data-game="${g.value}">
+            <span class="icon">${g.icon}</span>
+            <span>
+              ${g.label}
+              <span class="desc">${g.desc}</span>
+            </span>
+          </button>`,
+        ).join("")}
+      </div>
+      <button class="back-btn" data-action="join-anywhere">Есть код от друга? Присоединиться</button>
+    `;
+
+    this.contentEl.querySelectorAll<HTMLButtonElement>("[data-continue]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this.unlockAudio();
+        soundManager.playSelect();
+        this.callbacks.onContinue(btn.dataset.continue as GameKind);
+      });
+    });
+    this.contentEl.querySelectorAll<HTMLButtonElement>("[data-discard]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const game = btn.dataset.discard as GameKind;
+        delete this.continueInfo[game];
+        this.callbacks.onDiscardSave(game);
+        this.renderGamePicker();
+      });
+    });
+    this.contentEl.querySelectorAll<HTMLButtonElement>("[data-game]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this.unlockAudio();
+        soundManager.playSelect();
+        this.selectedGame = btn.dataset.game as GameKind;
+        this.selectedFormation = "triangle";
+        this.renderModeSelect();
+      });
+    });
+    this.contentEl.querySelector('[data-action="join-anywhere"]')!.addEventListener("click", () => {
+      this.unlockAudio();
+      soundManager.playSelect();
+      this.renderJoinPanel();
+    });
+  }
+
+  private renderModeSelect() {
+    const game = this.selectedGame;
+    this.contentEl.innerHTML = `
+      <h1 class="game-title">${GAME_TITLES[game]}</h1>
+      <div class="menu-panel">
+        <button class="back-btn">← К выбору игры</button>
+        ${
+          game === "corners"
+            ? `
+        <h2 class="section-title">Расстановка</h2>
+        <div class="online-tabs">
+          <button class="pill-btn ${this.selectedFormation === "triangle" ? "active" : ""}" data-formation="triangle">Треугольником</button>
+          <button class="pill-btn ${this.selectedFormation === "rectangle" ? "active" : ""}" data-formation="rectangle">Прямоугольником</button>
+        </div>`
+            : ""
+        }
         <button class="menu-btn" data-action="hotseat">
           <span class="icon">🎭</span>
           <span>
@@ -99,25 +171,23 @@ export class Menu {
           <span class="icon">🌐</span>
           <span>
             Игра онлайн
-            <span class="desc">Пригласите друга по коду комнаты</span>
+            <span class="desc">Создайте комнату и пригласите друга по коду</span>
           </span>
         </button>
       </div>
     `;
-    this.contentEl.querySelector('[data-action="continue"]')?.addEventListener("click", () => {
-      this.unlockAudio();
-      soundManager.playSelect();
-      this.callbacks.onContinue();
-    });
-    this.contentEl.querySelector('[data-action="discard-save"]')?.addEventListener("click", () => {
-      this.continueInfo = null;
-      this.callbacks.onDiscardSave();
-      this.renderRoot();
+    this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => this.renderGamePicker());
+    this.contentEl.querySelectorAll<HTMLButtonElement>("[data-formation]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this.selectedFormation = btn.dataset.formation as CornersFormation;
+        soundManager.playSelect();
+        this.renderModeSelect();
+      });
     });
     this.contentEl.querySelector('[data-action="hotseat"]')!.addEventListener("click", () => {
       this.unlockAudio();
       soundManager.playSelect();
-      this.callbacks.onStartHotseat();
+      this.callbacks.onStartHotseat(game, game === "corners" ? this.selectedFormation : undefined);
     });
     this.contentEl.querySelector('[data-action="ai"]')!.addEventListener("click", () => {
       this.unlockAudio();
@@ -127,13 +197,14 @@ export class Menu {
     this.contentEl.querySelector('[data-action="online"]')!.addEventListener("click", () => {
       this.unlockAudio();
       soundManager.playSelect();
-      this.renderOnlinePanel();
+      this.renderHostPanel();
     });
   }
 
   private renderAiPanel() {
+    const game = this.selectedGame;
     this.contentEl.innerHTML = `
-      <h1 class="game-title">Chess Online</h1>
+      <h1 class="game-title">${GAME_TITLES[game]}</h1>
       <div class="menu-panel">
         <button class="back-btn">← Назад</button>
         <h2 class="section-title">Уровень сложности</h2>
@@ -147,53 +218,35 @@ export class Menu {
         </div>
       </div>
     `;
-    this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => this.renderRoot());
+    this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => this.renderModeSelect());
     this.contentEl.querySelectorAll<HTMLButtonElement>("[data-difficulty]").forEach((btn) => {
       btn.addEventListener("click", () => {
         soundManager.playSelect();
-        this.callbacks.onStartAI(btn.dataset.difficulty as Difficulty);
+        this.callbacks.onStartAI(
+          game,
+          btn.dataset.difficulty as Difficulty,
+          game === "corners" ? this.selectedFormation : undefined,
+        );
       });
     });
   }
 
-  private renderOnlinePanel() {
+  /** Hosting always happens from within a chosen game's panel — the host picks the game up front. */
+  private renderHostPanel() {
     this.cancelledOnlineWait = false;
+    const game = this.selectedGame;
     this.contentEl.innerHTML = `
-      <h1 class="game-title">Chess Online</h1>
+      <h1 class="game-title">${GAME_TITLES[game]}</h1>
       <div class="menu-panel">
         <button class="back-btn">← Назад</button>
         <h2 class="section-title">Игра онлайн</h2>
-        <div class="online-tabs">
-          <button class="pill-btn active" data-tab="host">Создать комнату</button>
-          <button class="pill-btn" data-tab="join">Войти по коду</button>
-        </div>
         <div class="online-body"></div>
       </div>
     `;
     this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => {
       this.cancelledOnlineWait = true;
-      this.renderRoot();
+      this.renderModeSelect();
     });
-    const hostTab = this.contentEl.querySelector<HTMLButtonElement>('[data-tab="host"]')!;
-    const joinTab = this.contentEl.querySelector<HTMLButtonElement>('[data-tab="join"]')!;
-    hostTab.addEventListener("click", () => {
-      hostTab.classList.add("active");
-      joinTab.classList.remove("active");
-      this.renderHostBody();
-    });
-    joinTab.addEventListener("click", () => {
-      joinTab.classList.add("active");
-      hostTab.classList.remove("active");
-      this.renderJoinBody();
-    });
-    this.renderHostBody();
-  }
-
-  private onlineBody(): HTMLElement {
-    return this.contentEl.querySelector(".online-body")!;
-  }
-
-  private renderHostBody() {
     const body = this.onlineBody();
     body.innerHTML = `
       <p class="status-line">Нажмите, чтобы создать комнату и получить код для друга</p>
@@ -202,7 +255,7 @@ export class Menu {
     body.querySelector('[data-action="create"]')!.addEventListener("click", async () => {
       body.innerHTML = `<div class="spinner"></div><p class="status-line">Создаём комнату…</p>`;
       try {
-        const code = await this.callbacks.onHostOnline();
+        const code = await this.callbacks.onHostOnline(game, game === "corners" ? this.selectedFormation : undefined);
         if (this.cancelledOnlineWait) return;
         body.innerHTML = `
           <p class="status-line">Отправьте этот код другу:</p>
@@ -216,9 +269,31 @@ export class Menu {
           <p class="status-line error">Не удалось создать комнату. Проверьте соединение и попробуйте снова.</p>
           <button class="primary-btn" data-action="retry">Повторить</button>
         `;
-        body.querySelector('[data-action="retry"]')!.addEventListener("click", () => this.renderHostBody());
+        body.querySelector('[data-action="retry"]')!.addEventListener("click", () => this.renderHostPanel());
       }
     });
+  }
+
+  /** Joining doesn't require picking a game first — the host's room announces it once connected. */
+  private renderJoinPanel() {
+    this.cancelledOnlineWait = false;
+    this.contentEl.innerHTML = `
+      <h1 class="game-title">Chess Online</h1>
+      <div class="menu-panel">
+        <button class="back-btn">← Назад</button>
+        <h2 class="section-title">Присоединиться по коду</h2>
+        <div class="online-body"></div>
+      </div>
+    `;
+    this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => {
+      this.cancelledOnlineWait = true;
+      this.renderGamePicker();
+    });
+    this.renderJoinBody();
+  }
+
+  private onlineBody(): HTMLElement {
+    return this.contentEl.querySelector(".online-body")!;
   }
 
   private renderJoinBody() {
@@ -238,6 +313,7 @@ export class Menu {
     });
     input.focus();
     joinBtn.addEventListener("click", async () => {
+      this.unlockAudio();
       joinBtn.disabled = true;
       status.textContent = "";
       status.className = "status-line";

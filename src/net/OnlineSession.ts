@@ -1,5 +1,7 @@
 import { Peer, type DataConnection } from "peerjs";
 import type { PieceColor } from "../game/types";
+import type { GameKind } from "../game/SaveGame";
+import type { CornersFormation } from "../corners/CornersGame";
 
 /** promotion is chess-only (the target piece letter); other games just leave it undefined. */
 export type NetMessage =
@@ -7,7 +9,13 @@ export type NetMessage =
   | { kind: "resign" }
   | { kind: "rematchRequest" }
   | { kind: "rematchAccept" }
-  | { kind: "chat"; text: string };
+  | { kind: "chat"; text: string }
+  | { kind: "gameInfo"; game: GameKind; formation?: CornersFormation };
+
+export interface GameInfo {
+  game: GameKind;
+  formation?: CornersFormation;
+}
 
 interface OnlineSessionEvents {
   connected: () => void;
@@ -46,7 +54,8 @@ export class OnlineSession {
     for (const cb of this.listeners[event]) (cb as (...a: unknown[]) => void)(...args);
   }
 
-  async hostGame(): Promise<string> {
+  /** `game`/`formation` are announced to the joining peer as soon as they connect. */
+  async hostGame(game: GameKind, formation?: CornersFormation): Promise<string> {
     this.myColor = "w";
     this.roomCode = randomRoomCode();
     return new Promise((resolve, reject) => {
@@ -59,11 +68,13 @@ export class OnlineSession {
       this.peer.on("connection", (conn) => {
         this.conn = conn;
         this.wireConnection(conn);
+        conn.on("open", () => this.send({ kind: "gameInfo", game, formation }));
       });
     });
   }
 
-  async joinGame(code: string): Promise<void> {
+  /** Resolves once connected AND the host's gameInfo has arrived, so the caller knows which game to start. */
+  async joinGame(code: string): Promise<GameInfo> {
     this.myColor = "b";
     this.roomCode = code.trim().toUpperCase();
     return new Promise((resolve, reject) => {
@@ -72,7 +83,9 @@ export class OnlineSession {
         const conn = this.peer!.connect(ROOM_ID_PREFIX + this.roomCode, { reliable: true });
         this.conn = conn;
         this.wireConnection(conn);
-        conn.on("open", () => resolve());
+        this.on("message", (msg) => {
+          if (msg.kind === "gameInfo") resolve({ game: msg.game, formation: msg.formation });
+        });
         conn.on("error", () => reject(new Error("connection-failed")));
       });
       this.peer.on("error", (err) => {

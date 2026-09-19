@@ -1,16 +1,21 @@
 import "./style.css";
 import { Chess } from "chess.js";
 import { GameController } from "./game/GameController";
+import { CheckersController } from "./checkers/CheckersController";
+import { CornersController } from "./corners/CornersController";
 import { OnlineSession } from "./net/OnlineSession";
 import { Menu, type ContinueInfo } from "./ui/Menu";
 import { HUD } from "./ui/HUD";
 import { soundManager } from "./audio/SoundManager";
-import { loadSavedGame, clearSavedGame, type SavedGameState } from "./game/SaveGame";
+import { loadSavedGame, clearSavedGame, type SavedGameState, type GameKind } from "./game/SaveGame";
+import type { CornersFormation } from "./corners/CornersGame";
 import type { Difficulty, GameMode } from "./game/types";
 
 const app = document.getElementById("app")!;
 
-let controller: GameController | null = null;
+type AnyController = GameController | CheckersController | CornersController;
+
+let controller: AnyController | null = null;
 let activeOnlineSession: OnlineSession | null = null;
 
 const DIFFICULTY_RU: Record<Difficulty, string> = {
@@ -20,14 +25,19 @@ const DIFFICULTY_RU: Record<Difficulty, string> = {
   master: "Мастер",
 };
 
+const GAME_KINDS: GameKind[] = ["chess", "checkers", "corners"];
+
 function clearApp() {
   app.innerHTML = "";
 }
 
 function describeSavedGame(saved: SavedGameState): ContinueInfo {
-  const chess = new Chess(saved.chess!.fen);
   const modeLabel = saved.mode === "ai" ? `С компьютером · ${DIFFICULTY_RU[saved.difficulty ?? "medium"]}` : "Два игрока за экраном";
-  const turnLabel = chess.turn() === "w" ? "ход белых" : "ход чёрных";
+  let turn: "w" | "b" = "w";
+  if (saved.kind === "chess" && saved.chess) turn = new Chess(saved.chess.fen).turn();
+  else if (saved.kind === "checkers" && saved.checkers) turn = saved.checkers.turn;
+  else if (saved.kind === "corners" && saved.corners) turn = saved.corners.turn;
+  const turnLabel = turn === "w" ? "ход белых" : "ход чёрных";
   return { label: `${modeLabel} · ${turnLabel}` };
 }
 
@@ -42,43 +52,73 @@ function showMenu() {
   }
   clearApp();
 
-  const saved = loadSavedGame("chess");
+  const saves: Partial<Record<GameKind, SavedGameState>> = {};
+  for (const kind of GAME_KINDS) {
+    const saved = loadSavedGame(kind);
+    if (saved) saves[kind] = saved;
+  }
+  const continueInfo: Partial<Record<GameKind, ContinueInfo>> = {};
+  for (const kind of GAME_KINDS) {
+    const saved = saves[kind];
+    if (saved) continueInfo[kind] = describeSavedGame(saved);
+  }
 
   const menu = new Menu(
     {
-      onStartHotseat: () => startGame({ mode: "hotseat" }),
-      onStartAI: (difficulty: Difficulty) => startGame({ mode: "ai", difficulty }),
-      onHostOnline: async () => {
+      onStartHotseat: (game, formation) => startGame({ kind: game, mode: "hotseat", formation }),
+      onStartAI: (game, difficulty, formation) => startGame({ kind: game, mode: "ai", difficulty, formation }),
+      onHostOnline: async (game, formation) => {
         const session = new OnlineSession();
         activeOnlineSession = session;
-        const code = await session.hostGame();
+        const code = await session.hostGame(game, formation);
         session.on("connected", () => {
-          if (activeOnlineSession === session) startGame({ mode: "online", online: session });
+          if (activeOnlineSession === session) startGame({ kind: game, mode: "online", online: session, formation });
         });
         return code;
       },
       onJoinOnline: async (code: string) => {
         const session = new OnlineSession();
         activeOnlineSession = session;
-        await session.joinGame(code);
-        startGame({ mode: "online", online: session });
+        const info = await session.joinGame(code);
+        startGame({ kind: info.game, mode: "online", online: session, formation: info.formation });
       },
-      onOnlineReady: () => {},
-      onContinue: () => {
-        if (saved) startGame({ mode: saved.mode, difficulty: saved.difficulty, resume: saved });
+      onContinue: (game) => {
+        const saved = saves[game];
+        if (saved) startGame({ kind: game, mode: saved.mode, difficulty: saved.difficulty, resume: saved });
       },
-      onDiscardSave: () => clearSavedGame("chess"),
+      onDiscardSave: (game) => clearSavedGame(game),
     },
-    saved ? describeSavedGame(saved) : null,
+    continueInfo,
   );
   app.appendChild(menu.el);
 }
 
 interface StartOpts {
+  kind: GameKind;
   mode: GameMode;
   difficulty?: Difficulty;
   online?: OnlineSession;
   resume?: SavedGameState;
+  formation?: CornersFormation;
+}
+
+/** The HUD's action buttons (resign/rematch/save/undo) call identically-shaped methods on every game's controller. */
+function buildHud(mode: GameMode, ctrl: { resign(): void; restart(): void; saveNow(): boolean; undo(): boolean }): HUD {
+  return new HUD(
+    {
+      onResign: () => ctrl.resign(),
+      onOfferDraw: () => {
+        // simple local draw offer: in hotseat/AI it just ends as a draw; in online, a full offer/accept protocol
+        // is a natural follow-up but out of scope for this pass.
+      },
+      onMenu: () => showMenu(),
+      onRematch: () => ctrl.restart(),
+      onMuteToggle: () => {},
+      onSave: () => ctrl.saveNow(),
+      onUndo: () => ctrl.undo(),
+    },
+    { hotseat: mode === "hotseat", saveable: mode !== "online", undoable: mode !== "online" },
+  );
 }
 
 function startGame(opts: StartOpts) {
@@ -91,39 +131,32 @@ function startGame(opts: StartOpts) {
   screen.appendChild(boardContainer);
   app.appendChild(screen);
 
-  controller = new GameController(boardContainer, {
+  if (opts.kind === "chess") startChessGame(boardContainer, screen, opts);
+  else if (opts.kind === "checkers") startCheckersGame(boardContainer, screen, opts);
+  else startCornersGame(boardContainer, screen, opts);
+}
+
+function startChessGame(boardContainer: HTMLElement, screen: HTMLElement, opts: StartOpts) {
+  const ctrl = new GameController(boardContainer, {
     mode: opts.mode,
     difficulty: opts.difficulty,
     online: opts.online,
     resume: opts.resume,
   });
+  controller = ctrl;
 
-  const hud = new HUD(
-    {
-      onResign: () => controller?.resign(),
-      onOfferDraw: () => {
-        // simple local draw offer: in hotseat/AI it just ends as a draw; in online, a full offer/accept protocol
-        // is a natural follow-up but out of scope for this pass.
-      },
-      onMenu: () => showMenu(),
-      onRematch: () => controller?.restart(),
-      onMuteToggle: () => {},
-      onSave: () => controller?.saveNow() ?? false,
-      onUndo: () => controller?.undo() ?? false,
-    },
-    { hotseat: opts.mode === "hotseat", saveable: opts.mode !== "online", undoable: opts.mode !== "online" },
-  );
+  const hud = buildHud(opts.mode, ctrl);
   screen.appendChild(hud.el);
 
-  controller.callbacks = {
-    onTurnChange: (turn) => hud.setTurn(turn, controller!.game.inCheck()),
+  ctrl.callbacks = {
+    onTurnChange: (turn) => hud.setTurn(turn, ctrl.game.inCheck()),
     onMove: (_move, captured) => {
       hud.updateCaptured(captured);
-      hud.setTurn(controller!.game.turn, controller!.game.inCheck());
+      hud.setTurn(ctrl.game.turn, ctrl.game.inCheck());
     },
     onUndo: (turn, captured) => {
       hud.updateCaptured(captured);
-      hud.setTurn(turn, controller!.game.inCheck());
+      hud.setTurn(turn, ctrl.game.inCheck());
     },
     onPromotionNeeded: (color) => hud.promptPromotion(color),
     onGameOver: (info) => hud.showGameOver(info),
@@ -131,8 +164,67 @@ function startGame(opts: StartOpts) {
   };
 
   if (opts.resume) {
-    hud.updateCaptured(controller.capturedSummary());
-    hud.setTurn(controller.game.turn, controller.game.inCheck());
+    hud.updateCaptured(ctrl.capturedSummary());
+    hud.setTurn(ctrl.game.turn, ctrl.game.inCheck());
+  } else {
+    hud.setTurn("w", false);
+    soundManager.playGameStart();
+  }
+}
+
+function startCheckersGame(boardContainer: HTMLElement, screen: HTMLElement, opts: StartOpts) {
+  const ctrl = new CheckersController(boardContainer, {
+    mode: opts.mode,
+    difficulty: opts.difficulty,
+    online: opts.online,
+    resume: opts.resume,
+  });
+  controller = ctrl;
+
+  const hud = buildHud(opts.mode, ctrl);
+  screen.appendChild(hud.el);
+
+  ctrl.callbacks = {
+    onTurnChange: (turn) => hud.setTurn(turn, false),
+    onMove: (captured) => {
+      hud.updateCaptured(captured);
+      hud.setTurn(ctrl.game.currentTurn, false);
+    },
+    onGameOver: (info) => hud.showGameOver(info),
+    onOpponentDisconnected: () => hud.showDisconnectNotice(),
+  };
+
+  if (opts.resume) {
+    hud.updateCaptured(ctrl.capturedSummary());
+    hud.setTurn(ctrl.game.currentTurn, false);
+  } else {
+    hud.setTurn("w", false);
+    soundManager.playGameStart();
+  }
+}
+
+function startCornersGame(boardContainer: HTMLElement, screen: HTMLElement, opts: StartOpts) {
+  const ctrl = new CornersController(boardContainer, {
+    mode: opts.mode,
+    difficulty: opts.difficulty,
+    formation: opts.formation ?? "triangle",
+    online: opts.online,
+    resume: opts.resume,
+  });
+  controller = ctrl;
+
+  const hud = buildHud(opts.mode, ctrl);
+  screen.appendChild(hud.el);
+
+  ctrl.callbacks = {
+    onTurnChange: (turn) => hud.setTurn(turn, false),
+    onMove: () => hud.setTurn(ctrl.game.currentTurn, false),
+    onGameOver: (info) => hud.showGameOver(info),
+    onOpponentDisconnected: () => hud.showDisconnectNotice(),
+  };
+
+  if (opts.resume) {
+    hud.setTurn(ctrl.game.currentTurn, false);
   } else {
     hud.setTurn("w", false);
     soundManager.playGameStart();
