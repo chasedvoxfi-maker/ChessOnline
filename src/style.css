@@ -55,7 +55,10 @@ button {
   position: fixed;
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* anchored to the top, not vertically centered: every panel
+    starts at the same Y regardless of its own height, so it reliably clears the art's mock
+    button band below the title instead of sometimes under- or over-covering it depending on
+    content length */
   justify-content: center;
   overflow: hidden;
 }
@@ -76,11 +79,10 @@ button {
     radial-gradient(circle at 30% 20%, rgba(212, 175, 106, 0.16), transparent 55%),
     radial-gradient(circle at 75% 75%, rgba(90, 60, 160, 0.28), transparent 55%),
     linear-gradient(160deg, #0d0a18 0%, #171128 45%, #0a0812 100%);
-  /* the source art has its own baked-in title/button mockup off to the right — favor the
-     left side (the pieces and blossoms) and darken it so our own title/buttons stay readable,
-     with just enough blur to soften (not hide) the mockup text underneath */
-  filter: brightness(0.8) saturate(1.1) blur(2px);
-  transform: scale(1.02); /* hides the blur's soft edge fringe at the viewport border */
+  /* the artwork is the main visual now — kept crisp; the mock "Play/Multiplayer/…" labels
+     underneath our panels are handled by consistently positioning/sizing those panels to
+     cover them, not by blurring the whole picture */
+  filter: saturate(1.08);
 }
 
 .menu-bg-fallback::before {
@@ -101,125 +103,210 @@ button {
   }
 }
 
+/* A darkened + blurred duplicate of the art, masked to fade in/out vertically so only the
+   middle band (where our menu panel sits, and where the key-art's own mock "Play/
+   Multiplayer/…" buttons live) is affected — the title band up top and the pieces/scenery
+   down low stay fully crisp underneath. Blur (not just darkening) is what actually kills the
+   mock labels' legibility: bright white text stays readable through a merely-darkened
+   backdrop, but not through a blurred one. */
+.menu-bg-shield {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  background: url("/ChessOnline/menu-bg.png") 20% center / cover no-repeat;
+  filter: brightness(0.4) saturate(1.08) blur(10px);
+  transform: scale(1.06);
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 24%,
+    black 29%,
+    black 62%,
+    transparent 74%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 24%,
+    black 29%,
+    black 62%,
+    transparent 74%,
+    transparent 100%
+  );
+}
+
 .menu-veil {
   position: absolute;
   inset: 0;
-  z-index: 1;
-  background: radial-gradient(ellipse at center, rgba(8, 6, 14, 0.35) 0%, rgba(6, 5, 12, 0.82) 78%);
+  z-index: 2;
+  /* just a gentle vignette — the shield layer above does the real work of hiding the mock
+     buttons; this only adds a touch of edge darkening for legibility at the very top/bottom */
+  background: radial-gradient(ellipse at center, rgba(6, 5, 12, 0) 40%, rgba(4, 3, 8, 0.35) 100%);
 }
 
 .menu-content {
   position: relative;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2.2rem;
-  padding: calc(2rem + env(safe-area-inset-top)) calc(2rem + env(safe-area-inset-right))
+  /* top clearance is generous and viewport-relative: below the art's title and mock button
+     band on every screen size, so every panel (any height) starts past that zone */
+  padding: calc(max(2rem, 29vh) + env(safe-area-inset-top)) calc(2rem + env(safe-area-inset-right))
     calc(2rem + env(safe-area-inset-bottom)) calc(2rem + env(safe-area-inset-left));
   width: min(560px, 92vw);
   max-height: 92vh;
   overflow-y: auto;
 }
 
-.game-title {
+/* The key-art carries its own title now, so sub-screens just need a small contextual
+   label (which game is selected) instead of repeating a second big title. */
+.panel-game-label {
   font-family: "Cinzel", serif;
-  font-weight: 900;
-  font-size: clamp(2.6rem, 7vw, 4.4rem);
-  letter-spacing: 0.04em;
-  text-align: center;
-  margin: 0;
-  background: linear-gradient(180deg, var(--gold-bright) 0%, var(--gold) 55%, #a87c3a 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 8px 40px rgba(212, 175, 106, 0.25);
-  animation: title-glow 4s ease-in-out infinite;
-}
-
-.game-subtitle {
-  font-family: "Manrope", sans-serif;
-  color: var(--text-dim);
-  letter-spacing: 0.35em;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
-  font-size: 0.78rem;
-  margin-top: -1.6rem;
   text-align: center;
+  color: var(--gold-bright);
+  margin: -0.4rem 0 0.2rem;
 }
 
-@keyframes title-glow {
-  0%, 100% {
-    filter: drop-shadow(0 0 18px rgba(212, 175, 106, 0.25));
-  }
-  50% {
-    filter: drop-shadow(0 0 34px rgba(212, 175, 106, 0.5));
-  }
+.join-link {
+  align-self: center;
+  color: var(--gold);
+  font-family: "Cinzel", serif;
+  letter-spacing: 0.02em;
 }
 
 .menu-panel {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.menu-panel.card {
   background: var(--bg-panel);
   border: 1px solid var(--panel-border);
   border-radius: 18px;
   padding: 1.6rem;
   backdrop-filter: blur(14px);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
 }
 
+/* Pill buttons styled after the key-art's own mock UI: a dark glass capsule, thin gold
+   rim, a gold icon in a bordered roundel, elegant serif label. */
 .menu-btn {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 0.9rem;
+  gap: 1rem;
   width: 100%;
-  padding: 1rem 1.3rem;
-  border-radius: 12px;
-  border: 1px solid var(--panel-border);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
-  color: var(--text-main);
+  padding: 0.85rem 1.5rem 0.85rem 0.85rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(212, 175, 106, 0.55);
+  background: rgba(10, 8, 15, 0.8);
+  backdrop-filter: blur(18px);
+  color: var(--gold-bright);
+  font-family: "Cinzel", serif;
   font-size: 1.05rem;
   font-weight: 700;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  letter-spacing: 0.02em;
   text-align: left;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease, border-color 0.22s ease,
+    background 0.22s ease;
 }
 
-.menu-btn .icon {
-  font-size: 1.4rem;
+.menu-icon-badge {
+  flex: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  border: 1.5px solid rgba(212, 175, 106, 0.55);
+  background: rgba(212, 175, 106, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold-bright);
+  font-size: 1.2rem;
+}
+
+.menu-icon-badge svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: currentColor;
 }
 
 .menu-btn .desc {
   display: block;
+  font-family: "Manrope", sans-serif;
   font-weight: 500;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
+  letter-spacing: 0;
   color: var(--text-dim);
-  margin-top: 0.15rem;
+  margin-top: 0.2rem;
 }
 
-.menu-btn:hover {
-  transform: translateY(-2px);
-  border-color: var(--gold);
-  box-shadow: 0 10px 30px rgba(212, 175, 106, 0.18);
-  background: linear-gradient(180deg, rgba(212, 175, 106, 0.14), rgba(212, 175, 106, 0.02));
+@media (hover: hover) {
+  .menu-btn:hover {
+    transform: scale(1.035);
+    border-color: var(--gold-bright);
+    box-shadow: 0 10px 34px rgba(212, 175, 106, 0.3);
+    background: rgba(26, 20, 34, 0.88);
+  }
+  .menu-btn:hover .menu-icon-badge {
+    border-color: var(--gold-bright);
+    background: rgba(212, 175, 106, 0.18);
+  }
 }
 
 .menu-btn:active {
-  transform: translateY(0);
+  transform: scale(0.96);
+}
+
+/* a soft gold flash from the touch/click point — works via :active alone on touch (no
+   hover state to fight with) and layers with the ripple span on pointer devices */
+.menu-btn:active,
+.pill-btn:active,
+.primary-btn:active {
+  filter: brightness(1.12);
+}
+
+.btn-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(243, 217, 153, 0.5) 0%, rgba(212, 175, 106, 0.18) 55%, transparent 72%);
+  transform: scale(0);
+  opacity: 1;
+  animation: ripple-pop 0.65s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes ripple-pop {
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
 }
 
 .continue-panel {
-  padding-bottom: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 .continue-btn {
-  border-color: var(--gold);
-  background: linear-gradient(180deg, rgba(212, 175, 106, 0.2), rgba(212, 175, 106, 0.04));
+  border-color: var(--gold-bright);
+  background: rgba(38, 30, 18, 0.82);
   box-shadow: 0 10px 26px rgba(212, 175, 106, 0.16);
 }
 .continue-panel .back-btn {
   width: 100%;
   text-align: center;
-  margin-top: 0.5rem;
   font-size: 0.78rem;
 }
 
@@ -251,17 +338,25 @@ button {
 }
 
 .pill-btn {
+  position: relative;
+  overflow: hidden;
   padding: 0.75rem 1rem;
   border-radius: 999px;
   border: 1px solid var(--panel-border);
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-main);
   font-weight: 700;
-  transition: all 0.15s ease;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s ease, background 0.15s ease;
 }
-.pill-btn:hover {
-  border-color: var(--gold);
-  background: rgba(212, 175, 106, 0.12);
+@media (hover: hover) {
+  .pill-btn:hover {
+    transform: scale(1.03);
+    border-color: var(--gold);
+    background: rgba(212, 175, 106, 0.12);
+  }
+}
+.pill-btn:active {
+  transform: scale(0.96);
 }
 .pill-btn.active {
   background: linear-gradient(180deg, var(--gold-bright), var(--gold));
@@ -337,6 +432,8 @@ button {
 }
 
 .primary-btn {
+  position: relative;
+  overflow: hidden;
   padding: 0.85rem 1.4rem;
   border-radius: 12px;
   border: none;
@@ -347,9 +444,14 @@ button {
   box-shadow: 0 10px 26px rgba(212, 175, 106, 0.25);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.primary-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 34px rgba(212, 175, 106, 0.35);
+@media (hover: hover) {
+  .primary-btn:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 14px 34px rgba(212, 175, 106, 0.35);
+  }
+}
+.primary-btn:active {
+  transform: scale(0.96);
 }
 .primary-btn:disabled {
   opacity: 0.5;

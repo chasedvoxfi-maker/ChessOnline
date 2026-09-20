@@ -28,10 +28,27 @@ const DIFFICULTY_LABELS: { value: Difficulty; label: string; desc: string }[] = 
 const GAME_LABELS: { value: GameKind; icon: string; label: string; desc: string }[] = [
   { value: "chess", icon: "♞", label: "Шахматы", desc: "классическая королевская игра" },
   { value: "checkers", icon: "⛀", label: "Шашки", desc: "с обязательным взятием и дамками" },
-  { value: "corners", icon: "🔺", label: "Уголки", desc: "переведите все фишки в дальний угол" },
+  { value: "corners", icon: "▲", label: "Уголки", desc: "переведите все фишки в дальний угол" },
 ];
 
 const GAME_TITLES: Record<GameKind, string> = { chess: "Шахматы", checkers: "Шашки", corners: "Уголки" };
+
+/** Simple gold line icons, matching the key-art's own icon-in-a-roundel style. */
+const SVG_ICONS: Record<string, string> = {
+  play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+  people:
+    '<svg viewBox="0 0 24 24"><path d="M8 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8 0a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2 20c.3-3.3 3-5.5 6-5.5s5.7 2.2 6 5.5H2Zm12.2-5.4c2.6.5 4.6 2.5 4.8 5.4H24c-.2-2.7-1.9-4.7-4.4-5.2-.4-.1-.9-.2-1.4-.2Z"/></svg>',
+  robot:
+    '<svg viewBox="0 0 24 24"><path d="M12 2a1 1 0 0 1 1 1v1.06A6 6 0 0 1 19 10v1h.5a1.5 1.5 0 0 1 0 3H19v3a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-3h-.5a1.5 1.5 0 0 1 0-3H5v-1a6 6 0 0 1 6-5.94V3a1 1 0 0 1 1-1ZM9 11a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></svg>',
+  globe:
+    '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm7.94 9h-3.1a15.6 15.6 0 0 0-1.14-5.3A8.02 8.02 0 0 1 19.94 11ZM12 4.1c.8 1.1 1.7 3 1.9 6.9h-3.8c.2-3.9 1.1-5.8 1.9-6.9ZM8.3 5.7A15.6 15.6 0 0 0 7.16 11h-3.1A8.02 8.02 0 0 1 8.3 5.7ZM4.06 13h3.1c.15 2 .55 3.8 1.14 5.3A8.02 8.02 0 0 1 4.06 13ZM12 19.9c-.8-1.1-1.7-3-1.9-6.9h3.8c-.2 3.9-1.1 5.8-1.9 6.9Zm3.7-1.6c.59-1.5.99-3.3 1.14-5.3h3.1a8.02 8.02 0 0 1-4.24 5.3Z"/></svg>',
+};
+
+/** Wraps a text glyph or one of SVG_ICONS in the gold roundel badge used by every pill button. */
+function iconBadge(glyphOrSvgKey: string): string {
+  const content = SVG_ICONS[glyphOrSvgKey] ?? glyphOrSvgKey;
+  return `<span class="menu-icon-badge">${content}</span>`;
+}
 
 /** The main menu screen: game picker, mode selection, AI difficulty, and the online host/join lobby. */
 export class Menu {
@@ -51,6 +68,7 @@ export class Menu {
     this.el.innerHTML = `
       <video class="menu-bg-video hidden" autoplay muted loop playsinline></video>
       <div class="menu-bg-fallback"></div>
+      <div class="menu-bg-shield"></div>
       <div class="menu-veil"></div>
       <div class="menu-content"></div>
     `;
@@ -77,7 +95,7 @@ export class Menu {
       (g) => `
       <div class="menu-panel continue-panel">
         <button class="menu-btn continue-btn" data-continue="${g.value}">
-          <span class="icon">▶️</span>
+          ${iconBadge("play")}
           <span>
             Продолжить: ${GAME_TITLES[g.value]}
             <span class="desc">${this.continueInfo[g.value]!.label}</span>
@@ -88,14 +106,12 @@ export class Menu {
     );
 
     this.contentEl.innerHTML = `
-      <h1 class="game-title">Chess Online</h1>
-      <p class="game-subtitle">Три классические игры в трёх измерениях</p>
       ${continuePanels.join("")}
-      <div class="menu-panel">
+      <div class="menu-panel card">
         ${GAME_LABELS.map(
           (g) => `
           <button class="menu-btn" data-game="${g.value}">
-            <span class="icon">${g.icon}</span>
+            ${iconBadge(g.icon)}
             <span>
               ${g.label}
               <span class="desc">${g.desc}</span>
@@ -103,8 +119,9 @@ export class Menu {
           </button>`,
         ).join("")}
       </div>
-      <button class="back-btn" data-action="join-anywhere">Есть код от друга? Присоединиться</button>
+      <button class="back-btn join-link" data-action="join-anywhere">Есть код от друга? Присоединиться</button>
     `;
+    this.wireEffects();
 
     this.contentEl.querySelectorAll<HTMLButtonElement>("[data-continue]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -140,9 +157,9 @@ export class Menu {
   private renderModeSelect() {
     const game = this.selectedGame;
     this.contentEl.innerHTML = `
-      <h1 class="game-title">${GAME_TITLES[game]}</h1>
-      <div class="menu-panel">
+      <div class="menu-panel card">
         <button class="back-btn">← К выбору игры</button>
+        <div class="panel-game-label">${GAME_TITLES[game]}</div>
         ${
           game === "corners"
             ? `
@@ -154,21 +171,21 @@ export class Menu {
             : ""
         }
         <button class="menu-btn" data-action="hotseat">
-          <span class="icon">🎭</span>
+          ${iconBadge("people")}
           <span>
             Два игрока за одним экраном
             <span class="desc">Играйте по очереди, камера разворачивается к каждому</span>
           </span>
         </button>
         <button class="menu-btn" data-action="ai">
-          <span class="icon">🤖</span>
+          ${iconBadge("robot")}
           <span>
             Игра с компьютером
             <span class="desc">Выберите уровень сложности соперника</span>
           </span>
         </button>
         <button class="menu-btn" data-action="online">
-          <span class="icon">🌐</span>
+          ${iconBadge("globe")}
           <span>
             Игра онлайн
             <span class="desc">Создайте комнату и пригласите друга по коду</span>
@@ -176,6 +193,7 @@ export class Menu {
         </button>
       </div>
     `;
+    this.wireEffects();
     this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => this.renderGamePicker());
     this.contentEl.querySelectorAll<HTMLButtonElement>("[data-formation]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -204,9 +222,9 @@ export class Menu {
   private renderAiPanel() {
     const game = this.selectedGame;
     this.contentEl.innerHTML = `
-      <h1 class="game-title">${GAME_TITLES[game]}</h1>
-      <div class="menu-panel">
+      <div class="menu-panel card">
         <button class="back-btn">← Назад</button>
+        <div class="panel-game-label">${GAME_TITLES[game]}</div>
         <h2 class="section-title">Уровень сложности</h2>
         <div class="difficulty-grid">
           ${DIFFICULTY_LABELS.map(
@@ -218,6 +236,7 @@ export class Menu {
         </div>
       </div>
     `;
+    this.wireEffects();
     this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => this.renderModeSelect());
     this.contentEl.querySelectorAll<HTMLButtonElement>("[data-difficulty]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -236,13 +255,14 @@ export class Menu {
     this.cancelledOnlineWait = false;
     const game = this.selectedGame;
     this.contentEl.innerHTML = `
-      <h1 class="game-title">${GAME_TITLES[game]}</h1>
-      <div class="menu-panel">
+      <div class="menu-panel card">
         <button class="back-btn">← Назад</button>
+        <div class="panel-game-label">${GAME_TITLES[game]}</div>
         <h2 class="section-title">Игра онлайн</h2>
         <div class="online-body"></div>
       </div>
     `;
+    this.wireEffects();
     this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => {
       this.cancelledOnlineWait = true;
       this.renderModeSelect();
@@ -252,6 +272,7 @@ export class Menu {
       <p class="status-line">Нажмите, чтобы создать комнату и получить код для друга</p>
       <button class="primary-btn" data-action="create">Создать комнату</button>
     `;
+    this.wireEffects();
     body.querySelector('[data-action="create"]')!.addEventListener("click", async () => {
       body.innerHTML = `<div class="spinner"></div><p class="status-line">Создаём комнату…</p>`;
       try {
@@ -269,6 +290,7 @@ export class Menu {
           <p class="status-line error">Не удалось создать комнату. Проверьте соединение и попробуйте снова.</p>
           <button class="primary-btn" data-action="retry">Повторить</button>
         `;
+        this.wireEffects();
         body.querySelector('[data-action="retry"]')!.addEventListener("click", () => this.renderHostPanel());
       }
     });
@@ -278,13 +300,14 @@ export class Menu {
   private renderJoinPanel() {
     this.cancelledOnlineWait = false;
     this.contentEl.innerHTML = `
-      <h1 class="game-title">Chess Online</h1>
-      <div class="menu-panel">
+      <div class="menu-panel card">
         <button class="back-btn">← Назад</button>
+        <div class="panel-game-label">Chess Online</div>
         <h2 class="section-title">Присоединиться по коду</h2>
         <div class="online-body"></div>
       </div>
     `;
+    this.wireEffects();
     this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => {
       this.cancelledOnlineWait = true;
       this.renderGamePicker();
@@ -304,6 +327,7 @@ export class Menu {
       <button class="primary-btn" data-action="join" disabled>Присоединиться</button>
       <p class="status-line"></p>
     `;
+    this.wireEffects();
     const input = body.querySelector<HTMLInputElement>(".room-input")!;
     const joinBtn = body.querySelector<HTMLButtonElement>('[data-action="join"]')!;
     const status = body.querySelector<HTMLParagraphElement>(".status-line:last-child")!;
@@ -338,5 +362,28 @@ export class Menu {
 
   markCancelled() {
     this.cancelledOnlineWait = true;
+  }
+
+  /**
+   * A gold ripple radiating from the tap/click point on every interactive button, plus the
+   * scale/glow hover already handled in CSS. Safe to call repeatedly — it only ever adds
+   * listeners to buttons currently in the (freshly replaced) DOM.
+   */
+  private wireEffects() {
+    this.contentEl.querySelectorAll<HTMLButtonElement>(".menu-btn, .pill-btn, .primary-btn").forEach((btn) => {
+      btn.addEventListener("pointerdown", (e) => {
+        if (btn.disabled) return;
+        const rect = btn.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height) * 1.5;
+        const ripple = document.createElement("span");
+        ripple.className = "btn-ripple";
+        ripple.style.width = `${size}px`;
+        ripple.style.height = `${size}px`;
+        ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+        ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+        btn.appendChild(ripple);
+        ripple.addEventListener("animationend", () => ripple.remove());
+      });
+    });
   }
 }
