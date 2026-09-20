@@ -11,6 +11,11 @@
     <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 
+    <!-- Start fetching the menu background as early as possible — otherwise it's only
+         discovered once the CSS applies it, well after the JS bundle has loaded. -->
+    <link rel="preload" as="image" href="/ChessOnline/menu-bg-desktop.webp" media="(min-width: 700px)" />
+    <link rel="preload" as="image" href="/ChessOnline/menu-bg.webp" media="(max-width: 699.98px)" />
+
     <!-- iOS: launch full-screen from the home screen, no Safari chrome -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

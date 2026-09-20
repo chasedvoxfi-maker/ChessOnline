@@ -1,13 +1,20 @@
 /**
- * Generative ambient background music, synthesized in real time via the Web Audio API — no
- * external audio assets. A slow, softly overlapping pad of detuned tones drawn from a fixed
- * scale, so chord changes always sound consonant no matter which notes get picked, plus
- * (for the menu) occasional high "sparkle" notes for a little sense of magic.
+ * Background music. If a real track is dropped in public/audio/ (see CUSTOM_TRACKS below),
+ * that file is played directly; otherwise it falls back to a generative ambient pad synthesized
+ * in real time via the Web Audio API — a slow, softly overlapping pad of detuned tones drawn
+ * from a fixed scale, so chord changes always sound consonant no matter which notes get
+ * picked, plus (for the menu) occasional high "sparkle" notes for a little sense of magic.
  *
  * Kept fully independent of SoundManager (its own AudioContext and gain node) so the music
  * and sound-effects mute toggles never affect each other.
  */
 export type MusicTheme = "menu" | "game";
+
+/** Drop an mp3 at these paths (relative to public/) to replace the generative music with it. */
+const CUSTOM_TRACKS: Record<MusicTheme, string> = {
+  menu: "/ChessOnline/audio/menu-music.mp3",
+  game: "/ChessOnline/audio/game-music.mp3",
+};
 
 const MUTE_KEY = "chessonline-music-muted-v1";
 
@@ -45,6 +52,7 @@ export class MusicManager {
   private chordTimer: number | null = null;
   private sparkleTimer: number | null = null;
   private generation = 0; // bumped on stop()/theme change so stale timeouts no-op
+  private fileEl: HTMLAudioElement | null = null;
 
   private ensureContext(): AudioContext {
     if (!this.ctx) {
@@ -73,6 +81,7 @@ export class MusicManager {
   /** Must be called from a user gesture to unlock audio on mobile/Safari. */
   unlock() {
     this.ensureContext();
+    if (this.fileEl) void this.fileEl.play().catch(() => {});
   }
 
   setMuted(m: boolean) {
@@ -80,6 +89,7 @@ export class MusicManager {
     if (this.musicGain && this.ctx) {
       this.musicGain.gain.linearRampToValueAtTime(m ? 0 : this.volume, this.ctx.currentTime + 0.5);
     }
+    if (this.fileEl) this.fileEl.volume = m ? 0 : this.volume;
     try {
       localStorage.setItem(MUTE_KEY, m ? "1" : "0");
     } catch {
@@ -95,11 +105,10 @@ export class MusicManager {
   play(theme: MusicTheme) {
     if (this.theme === theme) return;
     this.stopVoices();
+    this.stopFile();
     this.theme = theme;
     const myGeneration = ++this.generation;
-    this.ensureContext();
-    this.scheduleChord(theme, myGeneration);
-    this.scheduleSparkle(theme, myGeneration);
+    this.tryPlayFile(theme, myGeneration);
   }
 
   stop() {
@@ -114,6 +123,36 @@ export class MusicManager {
       this.sparkleTimer = null;
     }
     this.stopVoices();
+    this.stopFile();
+  }
+
+  private stopFile() {
+    if (this.fileEl) {
+      this.fileEl.pause();
+      this.fileEl.removeAttribute("src");
+      this.fileEl = null;
+    }
+  }
+
+  /** Tries to play a real audio file for this theme; falls back to the generative pad if none exists. */
+  private tryPlayFile(theme: MusicTheme, generation: number) {
+    const audio = new Audio(CUSTOM_TRACKS[theme]);
+    audio.loop = true;
+    audio.volume = this.muted ? 0 : this.volume;
+    this.fileEl = audio;
+    let fallenBack = false;
+    const fallbackToGenerative = () => {
+      if (fallenBack || generation !== this.generation) return;
+      fallenBack = true;
+      if (this.fileEl === audio) this.fileEl = null;
+      this.ensureContext();
+      this.scheduleChord(theme, generation);
+      this.scheduleSparkle(theme, generation);
+    };
+    audio.addEventListener("error", fallbackToGenerative);
+    // autoplay may be blocked until unlock() runs from a user gesture — that's not a
+    // missing-file case, so it must never trigger the generative fallback.
+    audio.play().catch(() => {});
   }
 
   private stopVoices() {
