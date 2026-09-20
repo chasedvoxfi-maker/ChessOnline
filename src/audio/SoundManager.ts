@@ -1,5 +1,15 @@
 import type { PieceColor } from "../game/types";
 
+const MUTE_KEY = "chessonline-sfx-muted-v1";
+
+function loadMutedPref(): boolean {
+  try {
+    return localStorage.getItem(MUTE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * All sound effects are synthesized in real time via the Web Audio API —
  * no external audio assets to fetch, license, or ship.
@@ -8,13 +18,13 @@ export class SoundManager {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
-  muted = false;
+  muted = loadMutedPref();
 
   private ensureContext() {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.7;
+      this.master.gain.value = this.muted ? 0 : 0.7;
       this.master.connect(this.ctx.destination);
       this.noiseBuffer = this.makeNoiseBuffer();
     }
@@ -30,6 +40,11 @@ export class SoundManager {
   setMuted(m: boolean) {
     this.muted = m;
     if (this.master) this.master.gain.value = m ? 0 : 0.7;
+    try {
+      localStorage.setItem(MUTE_KEY, m ? "1" : "0");
+    } catch {
+      // best-effort only
+    }
   }
 
   setVolume(v: number) {

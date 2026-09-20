@@ -30,6 +30,26 @@ function woodTexture(baseColor: string, grainColor: string, size = 256): THREE.C
   return texture;
 }
 
+/** A small flat coordinate glyph (file letter or rank number), printed on the frame like a real board. */
+function createCoordLabel(text: string): THREE.Mesh {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#d9c49a";
+  ctx.font = "700 42px Georgia, 'Times New Roman', serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 32, 35);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
+  const geo = new THREE.PlaneGeometry(0.17, 0.17);
+  geo.rotateX(-Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = 1;
+  return mesh;
+}
+
 export interface BoardBuild {
   group: THREE.Group;
   squareMeshes: Map<string, THREE.Mesh>;
@@ -96,6 +116,30 @@ export function buildBoard(): BoardBuild {
   plinth.receiveShadow = true;
   plinth.castShadow = true;
   group.add(plinth);
+
+  // file/rank coordinates, printed small on the frame like a real board — on both opposite
+  // edges (so they read the same way regardless of which side the camera currently faces)
+  const FILES = "abcdefgh";
+  const edgeOffset = inner / 2 + frameThickness / 2;
+  const labelY = 0.06; // just proud of the frame's top surface
+  for (let file = 0; file < 8; file++) {
+    const x = (file - 3.5) * SQUARE_SIZE;
+    const near = createCoordLabel(FILES[file]);
+    near.position.set(x, labelY, edgeOffset);
+    group.add(near);
+    const far = createCoordLabel(FILES[file]);
+    far.position.set(x, labelY, -edgeOffset);
+    group.add(far);
+  }
+  for (let rank = 0; rank < 8; rank++) {
+    const z = (3.5 - rank) * SQUARE_SIZE;
+    const left = createCoordLabel(String(rank + 1));
+    left.position.set(-edgeOffset, labelY, z);
+    group.add(left);
+    const right = createCoordLabel(String(rank + 1));
+    right.position.set(edgeOffset, labelY, z);
+    group.add(right);
+  }
 
   const highlightLayer = new THREE.Group();
   group.add(highlightLayer);

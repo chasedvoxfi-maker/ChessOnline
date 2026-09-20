@@ -2,6 +2,7 @@ import type { Difficulty } from "../game/types";
 import type { GameKind } from "../game/SaveGame";
 import type { CornersFormation } from "../corners/CornersGame";
 import { soundManager } from "../audio/SoundManager";
+import { musicManager } from "../audio/MusicManager";
 
 export interface MenuCallbacks {
   onStartHotseat: (game: GameKind, formation?: CornersFormation) => void;
@@ -42,6 +43,14 @@ const SVG_ICONS: Record<string, string> = {
     '<svg viewBox="0 0 24 24"><path d="M12 2a1 1 0 0 1 1 1v1.06A6 6 0 0 1 19 10v1h.5a1.5 1.5 0 0 1 0 3H19v3a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-3h-.5a1.5 1.5 0 0 1 0-3H5v-1a6 6 0 0 1 6-5.94V3a1 1 0 0 1 1-1ZM9 11a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></svg>',
   globe:
     '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm7.94 9h-3.1a15.6 15.6 0 0 0-1.14-5.3A8.02 8.02 0 0 1 19.94 11ZM12 4.1c.8 1.1 1.7 3 1.9 6.9h-3.8c.2-3.9 1.1-5.8 1.9-6.9ZM8.3 5.7A15.6 15.6 0 0 0 7.16 11h-3.1A8.02 8.02 0 0 1 8.3 5.7ZM4.06 13h3.1c.15 2 .55 3.8 1.14 5.3A8.02 8.02 0 0 1 4.06 13ZM12 19.9c-.8-1.1-1.7-3-1.9-6.9h3.8c-.2 3.9-1.1 5.8-1.9 6.9Zm3.7-1.6c.59-1.5.99-3.3 1.14-5.3h3.1a8.02 8.02 0 0 1-4.24 5.3Z"/></svg>',
+  musicOn:
+    '<svg viewBox="0 0 24 24"><path d="M9 18V5.5l11-2.2v11.2M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm11-3.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  musicOff:
+    '<svg viewBox="0 0 24 24"><path d="M9 18V5.5l11-2.2v11.2M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm11-3.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 3l18 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  soundOn:
+    '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a9 9 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  soundOff:
+    '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M3 3l18 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
 };
 
 /** Wraps a text glyph or one of SVG_ICONS in the gold roundel badge used by every pill button. */
@@ -70,13 +79,40 @@ export class Menu {
       <div class="menu-bg-fallback"></div>
       <div class="menu-bg-shield"></div>
       <div class="menu-veil"></div>
+      <div class="menu-audio-controls">
+        <button class="audio-toggle-btn" data-action="toggle-music" title="Музыка"></button>
+        <button class="audio-toggle-btn" data-action="toggle-sound" title="Звуки"></button>
+      </div>
       <div class="menu-content"></div>
     `;
     this.contentEl = this.el.querySelector(".menu-content")!;
     this.renderGamePicker();
+    this.wireAudioControls();
+    musicManager.play("menu");
 
     const video = this.el.querySelector<HTMLVideoElement>(".menu-bg-video")!;
     void video; // Hook for a future background video: set video.src = "/menu-bg.mp4" and remove "hidden".
+  }
+
+  private wireAudioControls() {
+    const musicBtn = this.el.querySelector<HTMLButtonElement>('[data-action="toggle-music"]')!;
+    const soundBtn = this.el.querySelector<HTMLButtonElement>('[data-action="toggle-sound"]')!;
+    const refresh = () => {
+      musicBtn.innerHTML = musicManager.isMuted() ? SVG_ICONS.musicOff : SVG_ICONS.musicOn;
+      soundBtn.innerHTML = soundManager.muted ? SVG_ICONS.soundOff : SVG_ICONS.soundOn;
+    };
+    refresh();
+    musicBtn.addEventListener("click", () => {
+      this.unlockAudio();
+      musicManager.setMuted(!musicManager.isMuted());
+      refresh();
+    });
+    soundBtn.addEventListener("click", () => {
+      this.unlockAudio();
+      soundManager.setMuted(!soundManager.muted);
+      soundManager.playSelect();
+      refresh();
+    });
   }
 
   /** Call with a URL to install a background video behind the menu (e.g. from public/). */
@@ -88,6 +124,7 @@ export class Menu {
 
   private unlockAudio() {
     soundManager.unlock();
+    musicManager.unlock();
   }
 
   private renderGamePicker() {
@@ -107,7 +144,7 @@ export class Menu {
 
     this.contentEl.innerHTML = `
       ${continuePanels.join("")}
-      <div class="menu-panel card">
+      <div class="menu-panel">
         ${GAME_LABELS.map(
           (g) => `
           <button class="menu-btn" data-game="${g.value}">
@@ -157,7 +194,7 @@ export class Menu {
   private renderModeSelect() {
     const game = this.selectedGame;
     this.contentEl.innerHTML = `
-      <div class="menu-panel card">
+      <div class="menu-panel">
         <button class="back-btn">← К выбору игры</button>
         <div class="panel-game-label">${GAME_TITLES[game]}</div>
         ${
@@ -222,7 +259,7 @@ export class Menu {
   private renderAiPanel() {
     const game = this.selectedGame;
     this.contentEl.innerHTML = `
-      <div class="menu-panel card">
+      <div class="menu-panel">
         <button class="back-btn">← Назад</button>
         <div class="panel-game-label">${GAME_TITLES[game]}</div>
         <h2 class="section-title">Уровень сложности</h2>
@@ -255,7 +292,7 @@ export class Menu {
     this.cancelledOnlineWait = false;
     const game = this.selectedGame;
     this.contentEl.innerHTML = `
-      <div class="menu-panel card">
+      <div class="menu-panel">
         <button class="back-btn">← Назад</button>
         <div class="panel-game-label">${GAME_TITLES[game]}</div>
         <h2 class="section-title">Игра онлайн</h2>
@@ -300,7 +337,7 @@ export class Menu {
   private renderJoinPanel() {
     this.cancelledOnlineWait = false;
     this.contentEl.innerHTML = `
-      <div class="menu-panel card">
+      <div class="menu-panel">
         <button class="back-btn">← Назад</button>
         <div class="panel-game-label">Chess Online</div>
         <h2 class="section-title">Присоединиться по коду</h2>

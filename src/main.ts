@@ -7,6 +7,7 @@ import { OnlineSession } from "./net/OnlineSession";
 import { Menu, type ContinueInfo } from "./ui/Menu";
 import { HUD } from "./ui/HUD";
 import { soundManager } from "./audio/SoundManager";
+import { musicManager } from "./audio/MusicManager";
 import { loadSavedGame, clearSavedGame, type SavedGameState, type GameKind } from "./game/SaveGame";
 import type { CornersFormation } from "./corners/CornersGame";
 import type { Difficulty, GameMode } from "./game/types";
@@ -123,6 +124,7 @@ function buildHud(mode: GameMode, ctrl: { resign(): void; restart(): void; saveN
 
 function startGame(opts: StartOpts) {
   clearApp();
+  musicManager.play("game");
 
   const screen = document.createElement("div");
   screen.className = "game-screen";

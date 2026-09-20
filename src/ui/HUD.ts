@@ -1,5 +1,6 @@
 import type { GameOverInfo, PieceColor, PieceType } from "../game/types";
 import { soundManager } from "../audio/SoundManager";
+import { musicManager } from "../audio/MusicManager";
 
 /** "m" (checkers man) is the only non-chess type shown in the captured tray — Corners has no captures. */
 export type CapturedGlyphType = PieceType | "m";
@@ -53,7 +54,8 @@ export class HUD {
           <button class="icon-btn" data-action="draw" title="Ничья">🤝</button>
           <button class="icon-btn" data-action="resign" title="Сдаться">🏳️</button>
           <button class="icon-btn rotate-btn" data-action="rotate" title="Повернуть экран">🔄</button>
-          <button class="icon-btn" data-action="mute" title="Звук">🔊</button>
+          <button class="icon-btn" data-action="music" title="Музыка"></button>
+          <button class="icon-btn" data-action="mute" title="Звук"></button>
           <button class="icon-btn" data-action="menu" title="Меню">☰</button>
         </div>
       </div>
@@ -87,13 +89,21 @@ export class HUD {
     this.el.querySelector('[data-action="undo"]')?.addEventListener("click", () => this.handleUndo());
     this.el.querySelector('[data-action="rotate"]')!.addEventListener("click", () => void this.handleRotate());
 
-    let muted = false;
     const muteBtn = this.el.querySelector<HTMLButtonElement>('[data-action="mute"]')!;
+    muteBtn.textContent = soundManager.muted ? "🔇" : "🔊";
     muteBtn.addEventListener("click", () => {
-      muted = !muted;
+      const muted = !soundManager.muted;
       muteBtn.textContent = muted ? "🔇" : "🔊";
       soundManager.setMuted(muted);
       this.callbacks.onMuteToggle(muted);
+    });
+
+    const musicBtn = this.el.querySelector<HTMLButtonElement>('[data-action="music"]')!;
+    musicBtn.textContent = musicManager.isMuted() ? "🔕" : "🎵";
+    musicBtn.addEventListener("click", () => {
+      const muted = !musicManager.isMuted();
+      musicBtn.textContent = muted ? "🔕" : "🎵";
+      musicManager.setMuted(muted);
     });
   }
 
