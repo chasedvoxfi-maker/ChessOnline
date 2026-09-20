@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { SQUARE_SIZE } from "./coords";
 
 /** Generates a subtle procedural wood-grain texture on a canvas — avoids shipping image assets. */
-function woodTexture(baseColor: string, grainColor: string, size = 256): THREE.CanvasTexture {
+export function woodTexture(baseColor: string, grainColor: string, size = 256): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d")!;

@@ -104,7 +104,10 @@ interface StartOpts {
 }
 
 /** The HUD's action buttons (resign/rematch/save/undo) call identically-shaped methods on every game's controller. */
-function buildHud(mode: GameMode, ctrl: { resign(): void; restart(): void; saveNow(): boolean; undo(): boolean }): HUD {
+function buildHud(
+  mode: GameMode,
+  ctrl: { resign(): void; restart(): void; saveNow(): boolean; undo(): boolean; board: { setTableMode(on: boolean): void } },
+): HUD {
   return new HUD(
     {
       onResign: () => ctrl.resign(),
@@ -115,6 +118,7 @@ function buildHud(mode: GameMode, ctrl: { resign(): void; restart(): void; saveN
       onMenu: () => showMenu(),
       onRematch: () => ctrl.restart(),
       onMuteToggle: () => {},
+      onViewToggle: (tableView) => ctrl.board.setTableMode(tableView),
       onSave: () => ctrl.saveNow(),
       onUndo: () => ctrl.undo(),
     },

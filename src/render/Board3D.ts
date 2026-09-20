@@ -3,6 +3,7 @@ import { buildBoard } from "./board";
 import { createMaterials, PIECE_FACTORIES, addOutline, type PieceMaterials, type PieceFactory } from "./pieceModels";
 import { squareToWorld, worldToSquare } from "./coords";
 import { createSelectMarker, createLegalDot, createLastMoveMarker, CheckGlow, ConfettiSystem } from "./effects";
+import { buildTableDecor, TRAY_WIDTH, TRAY_DEPTH, type TableDecor } from "./tableDecor";
 import type { PieceColor } from "../game/types";
 
 interface ActiveAnim {
@@ -14,6 +15,8 @@ interface ActiveAnim {
   elapsed: number;
   spin?: number;
   fadeOut?: boolean;
+  fromScale?: number;
+  toScale?: number;
   onComplete?: () => void;
 }
 
@@ -54,6 +57,12 @@ export class Board3D {
   private legalMarkers: THREE.Mesh[] = [];
   private lastMoveMarkers: THREE.Mesh[] = [];
 
+  // "table view" skin — wooden tabletop + captured-piece trays, toggled via setTableMode()
+  private tableDecor: TableDecor;
+  private tableMode = false;
+  private capturedGroup = new THREE.Group();
+  private capturedCounts: Record<PieceColor, number> = { w: 0, b: 0 };
+
   // camera orbit state
   private camAngle = 0;
   private camAngleTarget = 0;
@@ -93,6 +102,11 @@ export class Board3D {
     this.highlightLayer = highlightLayer;
     this.scene.add(this.checkGlow.group);
     this.scene.add(this.confetti.group);
+
+    this.tableDecor = buildTableDecor();
+    this.tableDecor.group.visible = false;
+    this.scene.add(this.tableDecor.group);
+    this.scene.add(this.capturedGroup);
 
     const planeGeo = new THREE.PlaneGeometry(8, 8);
     planeGeo.rotateX(-Math.PI / 2);
@@ -168,6 +182,18 @@ export class Board3D {
     [-0.5, 1.3, -4], [0.5, 1.3, -4], [-0.5, 1.3, 4], [0.5, 1.3, 4],
   ];
 
+  /** Outer corners of both captured-piece trays — only relevant (and only fitted for) table view. */
+  private trayFramingPoints(): [number, number, number][] {
+    const halfW = TRAY_WIDTH / 2;
+    const halfD = TRAY_DEPTH / 2;
+    const y = -0.3;
+    const pts: [number, number, number][] = [];
+    for (const z of [this.tableDecor.nearTrayZ, this.tableDecor.farTrayZ]) {
+      pts.push([-halfW, y, z - halfD], [halfW, y, z - halfD], [-halfW, y, z + halfD], [halfW, y, z + halfD]);
+    }
+    return pts;
+  }
+
   /**
    * The FOV that keeps every FRAMING_POINT inside the frustum for the camera's current
    * position/look-at and the given screen aspect, plus a small safety margin. Computed
@@ -200,7 +226,8 @@ export class Board3D {
     const marginRad = (2 * Math.PI) / 180;
     let maxH = 0;
     let maxV = 0;
-    for (const [px, py, pz] of Board3D.FRAMING_POINTS) {
+    const points = this.tableMode ? [...Board3D.FRAMING_POINTS, ...this.trayFramingPoints()] : Board3D.FRAMING_POINTS;
+    for (const [px, py, pz] of points) {
       const vx = px - Cx;
       const vy = py - Cy;
       const vz = pz - Cz;
@@ -223,12 +250,15 @@ export class Board3D {
    * Portrait phones (narrow) are pulled back a bit so the wide FOV that requires doesn't get
    * absurdly fisheye-distorted; the FOV itself is then solved analytically, not guessed.
    */
+  /** Camera elevation above the horizon, in degrees — ~60° reads as a raised, more overhead view of the board. */
+  private static readonly BASE_ELEVATION_RATIO = Math.tan((60 * Math.PI) / 180);
+
   private applyResponsiveFraming(aspect: number, height: number) {
     const portraitness = Math.max(0, Math.min(1, 1 - aspect)); // 0 on wide screens, up to ~1 on tall phones
     const shortScreen = aspect > 1.15 ? Math.max(0, Math.min(1, (560 - height) / 340)) : 0; // 0 at h>=560, 1 at h<=220
 
     this.camRadius = 7.4 + portraitness * 1.2 - shortScreen * 0.8;
-    this.camHeight = this.camRadius * (6.4 / 7.4) + portraitness * 1.4; // steepen the angle a bit on tall phones — a wide board wastes less vertical space viewed from more overhead
+    this.camHeight = this.camRadius * Board3D.BASE_ELEVATION_RATIO + portraitness * 1.4; // steepen the angle a bit further on tall phones — a wide board wastes less vertical space viewed from more overhead
     this.camLookY = 0.35 - portraitness * 0.32 + shortScreen * 0.18;
     this.camera.fov = this.computeRequiredFov(aspect);
   }
@@ -252,6 +282,35 @@ export class Board3D {
   flipTo(color: PieceColor) {
     this.camAngleTarget = color === "w" ? 0 : Math.PI;
     this.camTransitioning = true;
+  }
+
+  /** Toggles the wooden-table skin: a tabletop plus felt trays that captured pieces are set into. */
+  setTableMode(on: boolean) {
+    if (this.tableMode === on) return;
+    this.tableMode = on;
+    this.tableDecor.group.visible = on;
+    this.handleResize();
+  }
+
+  isTableMode() {
+    return this.tableMode;
+  }
+
+  private traySlotPosition(color: PieceColor, index: number): THREE.Vector3 {
+    const cols = 8;
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const spacingX = 0.82;
+    const spacingZ = 0.75;
+    const startX = -((cols - 1) * spacingX) / 2;
+    const centerZ = color === "w" ? this.tableDecor.farTrayZ : this.tableDecor.nearTrayZ;
+    const rowOffset = (row === 0 ? -1 : 1) * (spacingZ / 2);
+    return new THREE.Vector3(startX + col * spacingX, this.tableDecor.traySlotY, centerZ + rowOffset);
+  }
+
+  private nextTraySlot(color: PieceColor): THREE.Vector3 {
+    const index = this.capturedCounts[color]++;
+    return this.traySlotPosition(color, index);
   }
 
   private handleClick = (event: MouseEvent) => {
@@ -292,6 +351,8 @@ export class Board3D {
   clearAllPieces() {
     for (const mesh of this.pieceMeshes.values()) this.scene.remove(mesh);
     this.pieceMeshes.clear();
+    for (const mesh of [...this.capturedGroup.children]) this.capturedGroup.remove(mesh);
+    this.capturedCounts = { w: 0, b: 0 };
   }
 
   syncFromPieces(pieces: { type: string; color: PieceColor; square: string }[]) {
@@ -427,7 +488,29 @@ export class Board3D {
     }
     this.pieceMeshes.delete(square);
     const from = mesh.position.clone();
-    const isWhite = (mesh.userData as { color: PieceColor }).color === "w";
+    const color = (mesh.userData as { color: PieceColor }).color;
+
+    if (this.tableMode) {
+      const to = this.nextTraySlot(color);
+      this.anims.push({
+        mesh,
+        from,
+        to,
+        arcHeight: 1.0,
+        duration: 0.55,
+        spin: (Math.random() - 0.5) * 4,
+        fromScale: 0.95,
+        toScale: 0.44,
+        elapsed: 0,
+        onComplete: () => {
+          this.capturedGroup.add(mesh); // reparents; three.js detaches it from the scene root first
+          onComplete?.();
+        },
+      });
+      return;
+    }
+
+    const isWhite = color === "w";
     const to = from.clone().add(new THREE.Vector3(isWhite ? 3.2 : -3.2, -0.3, (Math.random() - 0.5) * 2));
     this.anims.push({
       mesh,
@@ -481,6 +564,9 @@ export class Board3D {
       pos.y += Math.sin(Math.PI * t) * a.arcHeight;
       a.mesh.position.copy(pos);
       if (a.spin) a.mesh.rotation.y += a.spin * dt;
+      if (a.fromScale !== undefined && a.toScale !== undefined) {
+        a.mesh.scale.setScalar(a.fromScale + (a.toScale - a.fromScale) * e);
+      }
       if (a.fadeOut) {
         a.mesh.traverse((obj) => {
           if (obj instanceof THREE.Mesh) {

@@ -13,12 +13,32 @@ function glyph(type: CapturedGlyphType, color: PieceColor) {
   return color === "w" ? WHITE_GLYPHS[type] : BLACK_GLYPHS[type];
 }
 
+const TABLE_VIEW_KEY = "chessonline-table-view-v1";
+
+function loadTableViewPref(): boolean {
+  try {
+    return localStorage.getItem(TABLE_VIEW_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveTableViewPref(on: boolean) {
+  try {
+    localStorage.setItem(TABLE_VIEW_KEY, on ? "1" : "0");
+  } catch {
+    // best-effort only
+  }
+}
+
 export interface HUDCallbacks {
   onResign: () => void;
   onOfferDraw?: () => void;
   onMenu: () => void;
   onRematch: () => void;
   onMuteToggle: (muted: boolean) => void;
+  /** Switches between the default angled camera and the raised "table view" skin (wooden table + captured-piece trays). */
+  onViewToggle: (tableView: boolean) => void;
   /** Persists the current game so it can be resumed later. Returns false if this game can't be saved (online). */
   onSave: () => boolean;
   /** Takes back one ply. Returns false if there was nothing to undo, or undo isn't available (online). */
@@ -54,6 +74,7 @@ export class HUD {
           <button class="icon-btn" data-action="draw" title="Ничья">🤝</button>
           <button class="icon-btn" data-action="resign" title="Сдаться">🏳️</button>
           <button class="icon-btn rotate-btn" data-action="rotate" title="Повернуть экран">🔄</button>
+          <button class="icon-btn" data-action="view" title="Вид со столом"></button>
           <button class="icon-btn" data-action="music" title="Музыка"></button>
           <button class="icon-btn" data-action="mute" title="Звук"></button>
           <button class="icon-btn" data-action="menu" title="Меню">☰</button>
@@ -88,6 +109,21 @@ export class HUD {
     this.el.querySelector('[data-action="save"]')?.addEventListener("click", () => this.handleSave());
     this.el.querySelector('[data-action="undo"]')?.addEventListener("click", () => this.handleUndo());
     this.el.querySelector('[data-action="rotate"]')!.addEventListener("click", () => void this.handleRotate());
+
+    const viewBtn = this.el.querySelector<HTMLButtonElement>('[data-action="view"]')!;
+    let tableView = loadTableViewPref();
+    const applyViewBtn = () => {
+      viewBtn.textContent = tableView ? "🪵" : "🎥";
+      viewBtn.title = tableView ? "Обычный вид" : "Вид со столом";
+    };
+    applyViewBtn();
+    this.callbacks.onViewToggle(tableView); // apply the saved preference right away
+    viewBtn.addEventListener("click", () => {
+      tableView = !tableView;
+      applyViewBtn();
+      saveTableViewPref(tableView);
+      this.callbacks.onViewToggle(tableView);
+    });
 
     const muteBtn = this.el.querySelector<HTMLButtonElement>('[data-action="mute"]')!;
     muteBtn.textContent = soundManager.muted ? "🔇" : "🔊";
