@@ -223,7 +223,7 @@ export class Board3D {
     const uy = rz * fx - rx * fz;
     const uz = rx * fy - 0 * fx;
 
-    const marginRad = (2 * Math.PI) / 180;
+    const marginRad = (1.3 * Math.PI) / 180;
     let maxH = 0;
     let maxV = 0;
     const points = this.tableMode ? [...Board3D.FRAMING_POINTS, ...this.trayFramingPoints()] : Board3D.FRAMING_POINTS;

@@ -6,6 +6,7 @@ import { CornersController } from "./corners/CornersController";
 import { OnlineSession } from "./net/OnlineSession";
 import { Menu, type ContinueInfo } from "./ui/Menu";
 import { HUD } from "./ui/HUD";
+import { RotateGate, tryLockLandscape } from "./ui/RotateGate";
 import { soundManager } from "./audio/SoundManager";
 import { musicManager } from "./audio/MusicManager";
 import { loadSavedGame, clearSavedGame, type SavedGameState, type GameKind } from "./game/SaveGame";
@@ -18,6 +19,7 @@ type AnyController = GameController | CheckersController | CornersController;
 
 let controller: AnyController | null = null;
 let activeOnlineSession: OnlineSession | null = null;
+let activeRotateGate: RotateGate | null = null;
 
 const DIFFICULTY_RU: Record<Difficulty, string> = {
   easy: "Новичок",
@@ -50,6 +52,10 @@ function showMenu() {
   if (activeOnlineSession) {
     activeOnlineSession.close();
     activeOnlineSession = null;
+  }
+  if (activeRotateGate) {
+    activeRotateGate.dispose();
+    activeRotateGate = null;
   }
   clearApp();
 
@@ -140,6 +146,9 @@ function startGame(opts: StartOpts) {
   if (opts.kind === "chess") startChessGame(boardContainer, screen, opts);
   else if (opts.kind === "checkers") startCheckersGame(boardContainer, screen, opts);
   else startCornersGame(boardContainer, screen, opts);
+
+  activeRotateGate = new RotateGate(screen);
+  void tryLockLandscape();
 }
 
 function startChessGame(boardContainer: HTMLElement, screen: HTMLElement, opts: StartOpts) {

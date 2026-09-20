@@ -73,7 +73,6 @@ export class HUD {
           ${opts.saveable ? '<button class="icon-btn" data-action="save" title="Сохранить игру">💾</button>' : ""}
           <button class="icon-btn" data-action="draw" title="Ничья">🤝</button>
           <button class="icon-btn" data-action="resign" title="Сдаться">🏳️</button>
-          <button class="icon-btn rotate-btn" data-action="rotate" title="Повернуть экран">🔄</button>
           <button class="icon-btn" data-action="view" title="Вид со столом"></button>
           <button class="icon-btn" data-action="music" title="Музыка"></button>
           <button class="icon-btn" data-action="mute" title="Звук"></button>
@@ -86,7 +85,6 @@ export class HUD {
         <div class="captured-tray" data-tray="w"></div>
         <div class="captured-tray" data-tray="b"></div>
       </div>
-      <div class="rotate-toast hidden">Поверните телефон в горизонтальное положение</div>
     `;
 
     const menuBtn = this.el.querySelector<HTMLButtonElement>('[data-action="menu"]')!;
@@ -108,7 +106,6 @@ export class HUD {
     this.el.querySelector('[data-action="draw"]')!.addEventListener("click", () => this.callbacks.onOfferDraw?.());
     this.el.querySelector('[data-action="save"]')?.addEventListener("click", () => this.handleSave());
     this.el.querySelector('[data-action="undo"]')?.addEventListener("click", () => this.handleUndo());
-    this.el.querySelector('[data-action="rotate"]')!.addEventListener("click", () => void this.handleRotate());
 
     const viewBtn = this.el.querySelector<HTMLButtonElement>('[data-action="view"]')!;
     let tableView = loadTableViewPref();
@@ -141,22 +138,6 @@ export class HUD {
       musicBtn.textContent = muted ? "🔕" : "🎵";
       musicManager.setMuted(muted);
     });
-  }
-
-  private async handleRotate() {
-    try {
-      const orientation = screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
-      if (orientation?.lock) {
-        if (!document.fullscreenElement) await document.documentElement.requestFullscreen().catch(() => {});
-        await orientation.lock("landscape");
-        return;
-      }
-    } catch {
-      // unsupported (notably iOS Safari) — fall through to the manual prompt
-    }
-    const toast = this.el.querySelector<HTMLDivElement>(".rotate-toast")!;
-    toast.classList.remove("hidden");
-    setTimeout(() => toast.classList.add("hidden"), 3000);
   }
 
   private handleUndo() {

@@ -3,6 +3,7 @@ import type { GameKind } from "../game/SaveGame";
 import type { CornersFormation } from "../corners/CornersGame";
 import { soundManager } from "../audio/SoundManager";
 import { musicManager } from "../audio/MusicManager";
+import { APP_VERSION } from "../version";
 
 export interface MenuCallbacks {
   onStartHotseat: (game: GameKind, formation?: CornersFormation) => void;
@@ -84,6 +85,7 @@ export class Menu {
         <button class="audio-toggle-btn" data-action="toggle-sound" title="Звуки"></button>
       </div>
       <div class="menu-content"></div>
+      <div class="app-version">v${APP_VERSION}</div>
     `;
     this.contentEl = this.el.querySelector(".menu-content")!;
     this.renderGamePicker();
