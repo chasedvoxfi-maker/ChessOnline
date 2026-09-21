@@ -222,14 +222,6 @@ button {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  /* A flat, unblurred backing behind the whole button stack — no blur anywhere in this menu.
-     Each button is already opaque on its own; this just covers the narrow gaps between them
-     (and around them) so the key-art's own baked-in "Play/Multiplayer/…" mock labels don't
-     peek through there. */
-  padding: 0.6rem;
-  margin: -0.6rem;
-  border-radius: 26px;
-  background: rgba(6, 5, 10, 0.88);
 }
 
 /* Pill buttons styled after the key-art's own mock UI: a dark glass capsule, gold icon in a
@@ -364,9 +356,7 @@ button {
   color: var(--gold);
   font-family: "Cinzel", serif;
   letter-spacing: 0.02em;
-  padding: 0.4rem 0.9rem;
-  border-radius: 999px;
-  background: rgba(6, 5, 10, 0.65);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8);
 }
 
 .section-title {
