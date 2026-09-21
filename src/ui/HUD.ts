@@ -125,6 +125,7 @@ export class HUD {
     const muteBtn = this.el.querySelector<HTMLButtonElement>('[data-action="mute"]')!;
     muteBtn.textContent = soundManager.muted ? "🔇" : "🔊";
     muteBtn.addEventListener("click", () => {
+      soundManager.unlock();
       const muted = !soundManager.muted;
       muteBtn.textContent = muted ? "🔇" : "🔊";
       soundManager.setMuted(muted);
@@ -134,6 +135,7 @@ export class HUD {
     const musicBtn = this.el.querySelector<HTMLButtonElement>('[data-action="music"]')!;
     musicBtn.textContent = musicManager.isMuted() ? "🔕" : "🎵";
     musicBtn.addEventListener("click", () => {
+      musicManager.unlock();
       const muted = !musicManager.isMuted();
       musicBtn.textContent = muted ? "🔕" : "🎵";
       musicManager.setMuted(muted);

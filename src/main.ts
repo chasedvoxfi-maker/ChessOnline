@@ -13,6 +13,18 @@ import { loadSavedGame, clearSavedGame, type SavedGameState, type GameKind } fro
 import type { CornersFormation } from "./corners/CornersGame";
 import type { Difficulty, GameMode } from "./game/types";
 
+// The very first tap/click anywhere unlocks audio — belt-and-braces alongside the specific
+// menu/HUD buttons that also call unlock(), since a couple of mobile browsers (notably iOS
+// Safari) can be picky about exactly which gesture counts.
+window.addEventListener(
+  "pointerdown",
+  () => {
+    soundManager.unlock();
+    musicManager.unlock();
+  },
+  { once: true, capture: true },
+);
+
 const app = document.getElementById("app")!;
 
 type AnyController = GameController | CheckersController | CornersController;

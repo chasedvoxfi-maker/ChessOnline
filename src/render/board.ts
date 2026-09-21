@@ -1,34 +1,6 @@
 import * as THREE from "three";
 import { SQUARE_SIZE } from "./coords";
-
-/** Generates a subtle procedural wood-grain texture on a canvas — avoids shipping image assets. */
-export function woodTexture(baseColor: string, grainColor: string, size = 256): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = baseColor;
-  ctx.fillRect(0, 0, size, size);
-  ctx.globalAlpha = 0.25;
-  for (let i = 0; i < 40; i++) {
-    ctx.strokeStyle = grainColor;
-    ctx.lineWidth = Math.random() * 1.5 + 0.3;
-    ctx.beginPath();
-    const y = Math.random() * size;
-    ctx.moveTo(0, y);
-    let x = 0;
-    let yy = y;
-    while (x < size) {
-      x += 12 + Math.random() * 20;
-      yy += (Math.random() - 0.5) * 10;
-      ctx.lineTo(x, yy);
-    }
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  return texture;
-}
+import { loadPhotoTexture } from "./textureLoader";
 
 /** A small flat coordinate glyph (file letter or rank number), printed on the frame like a real board. */
 function createCoordLabel(text: string): THREE.Mesh {
@@ -60,8 +32,8 @@ export function buildBoard(): BoardBuild {
   const group = new THREE.Group();
   const squareMeshes = new Map<string, THREE.Mesh>();
 
-  const lightTex = woodTexture("#e8d3ab", "#c9a86a");
-  const darkTex = woodTexture("#7a4a2b", "#4d2c17");
+  const lightTex = loadPhotoTexture("/ChessOnline/textures/board-light.webp");
+  const darkTex = loadPhotoTexture("/ChessOnline/textures/board-dark.webp");
 
   const lightMat = new THREE.MeshPhysicalMaterial({ map: lightTex, roughness: 0.5, clearcoat: 0.25, metalness: 0 });
   const darkMat = new THREE.MeshPhysicalMaterial({ map: darkTex, roughness: 0.45, clearcoat: 0.3, metalness: 0 });

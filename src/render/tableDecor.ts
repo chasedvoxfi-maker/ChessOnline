@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { woodTexture } from "./board";
+import { loadPhotoTexture } from "./textureLoader";
 
 /** Outer edge of the board+frame (see board.ts: 8 squares + 2×0.4 frame thickness). */
 const BOARD_OUTER_HALF = 4.4;
@@ -22,11 +22,11 @@ export interface TableDecor {
   traySlotY: number;
 }
 
-function createTray(woodColor: string): THREE.Group {
+function createTray(woodTexture: THREE.Texture): THREE.Group {
   const group = new THREE.Group();
 
   const woodMat = new THREE.MeshPhysicalMaterial({
-    map: woodTexture(woodColor, "#3a2416", 128),
+    map: woodTexture,
     roughness: 0.55,
     clearcoat: 0.2,
   });
@@ -54,9 +54,11 @@ function createTray(woodColor: string): THREE.Group {
 export function buildTableDecor(): TableDecor {
   const group = new THREE.Group();
 
-  const tableTex = woodTexture("#8a5a34", "#5c3a20", 512);
-  tableTex.wrapS = tableTex.wrapT = THREE.RepeatWrapping;
-  tableTex.repeat.set(3, 3);
+  const woodPhoto = loadPhotoTexture("/ChessOnline/textures/table-wood.webp");
+  woodPhoto.wrapS = woodPhoto.wrapT = THREE.RepeatWrapping;
+
+  const tableTex = woodPhoto.clone();
+  tableTex.repeat.set(6, 6);
   const tableMat = new THREE.MeshPhysicalMaterial({ map: tableTex, roughness: 0.6, clearcoat: 0.15 });
   const tableGeo = new THREE.PlaneGeometry(26, 26);
   tableGeo.rotateX(-Math.PI / 2);
@@ -65,11 +67,14 @@ export function buildTableDecor(): TableDecor {
   table.receiveShadow = true;
   group.add(table);
 
-  const leftTray = createTray("#6b4226");
+  const trayTex = woodPhoto.clone();
+  trayTex.repeat.set(1, 3);
+
+  const leftTray = createTray(trayTex);
   leftTray.position.set(-TRAY_CENTER_X, TABLE_Y, 0);
   group.add(leftTray);
 
-  const rightTray = createTray("#6b4226");
+  const rightTray = createTray(trayTex);
   rightTray.position.set(TRAY_CENTER_X, TABLE_Y, 0);
   group.add(rightTray);
 

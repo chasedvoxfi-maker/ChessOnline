@@ -53,6 +53,14 @@ export class MusicManager {
   private sparkleTimer: number | null = null;
   private generation = 0; // bumped on stop()/theme change so stale timeouts no-op
   private fileEl: HTMLAudioElement | null = null;
+  /**
+   * iOS Safari ties audio permission to the AudioContext's CREATION, not just resume() —
+   * a context built asynchronously (e.g. from a network response, off the gesture's call
+   * stack) can stay silently unusable even after a later resume() from a real click. So
+   * ensureContext() is never called eagerly from play(); it only runs inside unlock(),
+   * guaranteed to be a direct, synchronous user-gesture callback.
+   */
+  private unlocked = false;
 
   private ensureContext(): AudioContext {
     if (!this.ctx) {
@@ -80,8 +88,12 @@ export class MusicManager {
 
   /** Must be called from a user gesture to unlock audio on mobile/Safari. */
   unlock() {
+    const wasUnlocked = this.unlocked;
+    this.unlocked = true;
     this.ensureContext();
     if (this.fileEl) void this.fileEl.play().catch(() => {});
+    // a play() call before the first unlock only recorded the desired theme — start it now
+    if (!wasUnlocked && this.theme) this.tryPlayFile(this.theme, this.generation);
   }
 
   setMuted(m: boolean) {
@@ -107,8 +119,9 @@ export class MusicManager {
     this.stopVoices();
     this.stopFile();
     this.theme = theme;
-    const myGeneration = ++this.generation;
-    this.tryPlayFile(theme, myGeneration);
+    this.generation++;
+    if (!this.unlocked) return; // unlock() will start this theme once a real gesture arrives
+    this.tryPlayFile(theme, this.generation);
   }
 
   stop() {
