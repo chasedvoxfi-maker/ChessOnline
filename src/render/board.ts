@@ -24,37 +24,26 @@ function createCoordLabel(text: string): THREE.Mesh {
 
 export interface BoardBuild {
   group: THREE.Group;
-  squareMeshes: Map<string, THREE.Mesh>;
   highlightLayer: THREE.Group;
 }
 
 export function buildBoard(): BoardBuild {
   const group = new THREE.Group();
-  const squareMeshes = new Map<string, THREE.Mesh>();
 
-  const lightTex = loadPhotoTexture("/ChessOnline/textures/board-light.webp");
-  const darkTex = loadPhotoTexture("/ChessOnline/textures/board-dark.webp");
-
-  const lightMat = new THREE.MeshPhysicalMaterial({ map: lightTex, roughness: 0.5, clearcoat: 0.25, metalness: 0 });
-  const darkMat = new THREE.MeshPhysicalMaterial({ map: darkTex, roughness: 0.45, clearcoat: 0.3, metalness: 0 });
-
-  const squareGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.98, 0.12, SQUARE_SIZE * 0.98);
-
-  for (let file = 0; file < 8; file++) {
-    for (let rank = 0; rank < 8; rank++) {
-      const isLight = (file + rank) % 2 === 1;
-      const mesh = new THREE.Mesh(squareGeo, isLight ? lightMat : darkMat);
-      const square = String.fromCharCode(97 + file) + (rank + 1);
-      const x = (file - 3.5) * SQUARE_SIZE;
-      const z = (3.5 - rank) * SQUARE_SIZE;
-      mesh.position.set(x, -0.06, z);
-      mesh.receiveShadow = true;
-      mesh.castShadow = false;
-      mesh.name = `square-${square}`;
-      group.add(mesh);
-      squareMeshes.set(square, mesh);
-    }
-  }
+  // The playing surface is a single photo of a real board (perspective-corrected to a flat,
+  // regular 8x8 grid before export) rather than 64 separately-colored squares — one texture,
+  // one draw call, and every square gets its own bit of real wood grain instead of a repeated
+  // swatch.
+  const surfaceTex = loadPhotoTexture("/ChessOnline/textures/board-surface.webp");
+  const surfaceMat = new THREE.MeshPhysicalMaterial({ map: surfaceTex, roughness: 0.5, clearcoat: 0.2, metalness: 0 });
+  const edgeMat = new THREE.MeshPhysicalMaterial({ color: 0x3a2416, roughness: 0.5, clearcoat: 0.2 });
+  const slabGeo = new THREE.BoxGeometry(8 * SQUARE_SIZE, 0.12, 8 * SQUARE_SIZE);
+  // BoxGeometry face order: +x, -x, +y (top), -y, +z, -z — only the top needs the photo.
+  const slab = new THREE.Mesh(slabGeo, [edgeMat, edgeMat, surfaceMat, edgeMat, edgeMat, edgeMat]);
+  slab.position.y = -0.06;
+  slab.receiveShadow = true;
+  slab.castShadow = false;
+  group.add(slab);
 
   // frame
   const frameMat = new THREE.MeshPhysicalMaterial({ color: 0x2b1710, roughness: 0.35, clearcoat: 0.5 });
@@ -116,5 +105,5 @@ export function buildBoard(): BoardBuild {
   const highlightLayer = new THREE.Group();
   group.add(highlightLayer);
 
-  return { group, squareMeshes, highlightLayer };
+  return { group, highlightLayer };
 }
