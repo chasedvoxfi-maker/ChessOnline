@@ -3,7 +3,7 @@ import { buildBoard } from "./board";
 import { createMaterials, PIECE_FACTORIES, addOutline, type PieceMaterials, type PieceFactory } from "./pieceModels";
 import { squareToWorld, worldToSquare } from "./coords";
 import { createSelectMarker, createLegalDot, createLastMoveMarker, CheckGlow, ConfettiSystem } from "./effects";
-import { buildTableDecor, TRAY_WIDTH, TRAY_DEPTH, type TableDecor } from "./tableDecor";
+import { buildTableDecor, TRAY_SPAN, TRAY_THICKNESS, type TableDecor } from "./tableDecor";
 import type { PieceColor } from "../game/types";
 
 interface ActiveAnim {
@@ -69,6 +69,8 @@ export class Board3D {
   private camHeight = 6.4;
   private camRadius = 7.4;
   private camLookY = 0.35;
+  /** Look-at target offset toward the near/camera side, biasing the board's far edge to hug the top of the frame. */
+  private camLookZ = 0;
   private camTransitioning = false;
   private cameraOverride = false;
 
@@ -184,12 +186,12 @@ export class Board3D {
 
   /** Outer corners of both captured-piece trays — only relevant (and only fitted for) table view. */
   private trayFramingPoints(): [number, number, number][] {
-    const halfW = TRAY_WIDTH / 2;
-    const halfD = TRAY_DEPTH / 2;
+    const halfSpan = TRAY_SPAN / 2;
+    const halfThick = TRAY_THICKNESS / 2;
     const y = -0.3;
     const pts: [number, number, number][] = [];
-    for (const z of [this.tableDecor.nearTrayZ, this.tableDecor.farTrayZ]) {
-      pts.push([-halfW, y, z - halfD], [halfW, y, z - halfD], [-halfW, y, z + halfD], [halfW, y, z + halfD]);
+    for (const x of [this.tableDecor.leftTrayX, this.tableDecor.rightTrayX]) {
+      pts.push([x - halfThick, y, -halfSpan], [x + halfThick, y, -halfSpan], [x - halfThick, y, halfSpan], [x + halfThick, y, halfSpan]);
     }
     return pts;
   }
@@ -206,7 +208,7 @@ export class Board3D {
     const Cz = this.camRadius;
     let fx = 0 - Cx;
     let fy = this.camLookY - Cy;
-    let fz = 0 - Cz;
+    let fz = this.camLookZ - Cz;
     const flen = Math.hypot(fx, fy, fz);
     fx /= flen;
     fy /= flen;
@@ -249,17 +251,35 @@ export class Board3D {
    * included, while guaranteeing the whole board actually fits on screen at any aspect ratio.
    * Portrait phones (narrow) are pulled back a bit so the wide FOV that requires doesn't get
    * absurdly fisheye-distorted; the FOV itself is then solved analytically, not guessed.
+   *
+   * The look-at target is biased toward the near/camera side (camLookZ > 0) rather than the
+   * board's own center: that makes the FAR edge — not the geometric middle — the tight/binding
+   * constraint the FOV solves for, so the board's far edge sits right up against the top of the
+   * screen instead of leaving empty headroom above it, with any slack landing near the bottom
+   * (the player's own side) instead.
+   *
+   * Radius and height are derived from a fixed camera DISTANCE and the elevation angle (not a
+   * fixed radius with height scaling as tan(angle)) — the latter sends the camera's actual
+   * distance from the board toward infinity as the angle approaches 90°, which at steep angles
+   * pushed it far enough for the scene's exponential fog (tuned for ~9-10 units) to wash the
+   * whole board out to near-invisible. Distance stays constant across every angle instead.
    */
-  /** Camera elevation above the horizon, in degrees — ~60° reads as a raised, more overhead view of the board. */
-  private static readonly BASE_ELEVATION_RATIO = Math.tan((60 * Math.PI) / 180);
+  private static readonly VIEW_PRESETS: Record<"angle" | "top", { elevationDeg: number; distance: number; lookZ: number }> = {
+    angle: { elevationDeg: 70, distance: 9.6, lookZ: 1.7 },
+    top: { elevationDeg: 80, distance: 11, lookZ: 0.3 },
+  };
 
   private applyResponsiveFraming(aspect: number, height: number) {
     const portraitness = Math.max(0, Math.min(1, 1 - aspect)); // 0 on wide screens, up to ~1 on tall phones
     const shortScreen = aspect > 1.15 ? Math.max(0, Math.min(1, (560 - height) / 340)) : 0; // 0 at h>=560, 1 at h<=220
+    const preset = Board3D.VIEW_PRESETS[this.tableMode ? "top" : "angle"];
+    const elevationRad = (preset.elevationDeg * Math.PI) / 180;
+    const distance = preset.distance - shortScreen * 0.8;
 
-    this.camRadius = 7.4 + portraitness * 1.2 - shortScreen * 0.8;
-    this.camHeight = this.camRadius * Board3D.BASE_ELEVATION_RATIO + portraitness * 1.4; // steepen the angle a bit further on tall phones — a wide board wastes less vertical space viewed from more overhead
+    this.camRadius = distance * Math.cos(elevationRad) + portraitness * 0.5;
+    this.camHeight = distance * Math.sin(elevationRad) + portraitness * 1.4; // steepen a bit further on tall phones — a wide board wastes less vertical space viewed from more overhead
     this.camLookY = 0.35 - portraitness * 0.32 + shortScreen * 0.18;
+    this.camLookZ = preset.lookZ;
     this.camera.fov = this.computeRequiredFov(aspect);
   }
 
@@ -267,7 +287,11 @@ export class Board3D {
     const x = Math.sin(this.camAngle) * this.camRadius;
     const z = Math.cos(this.camAngle) * this.camRadius;
     this.camera.position.set(x, this.camHeight, z);
-    this.camera.lookAt(0, this.camLookY, 0);
+    // the look-at bias rotates together with the camera's own orbit position, so it stays
+    // biased toward whichever side is currently "near" regardless of which color is facing us
+    const lookX = Math.sin(this.camAngle) * this.camLookZ;
+    const lookZ = Math.cos(this.camAngle) * this.camLookZ;
+    this.camera.lookAt(lookX, this.camLookY, lookZ);
   }
 
   /** Instantly orient the camera behind the given color's side, 45°-ish "eye view". */
@@ -297,15 +321,15 @@ export class Board3D {
   }
 
   private traySlotPosition(color: PieceColor, index: number): THREE.Vector3 {
-    const cols = 8;
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const spacingX = 0.82;
-    const spacingZ = 0.75;
-    const startX = -((cols - 1) * spacingX) / 2;
-    const centerZ = color === "w" ? this.tableDecor.farTrayZ : this.tableDecor.nearTrayZ;
-    const rowOffset = (row === 0 ? -1 : 1) * (spacingZ / 2);
-    return new THREE.Vector3(startX + col * spacingX, this.tableDecor.traySlotY, centerZ + rowOffset);
+    const perColumn = 8;
+    const row = index % perColumn;
+    const col = Math.floor(index / perColumn);
+    const spacingZ = 0.82;
+    const spacingX = 0.7;
+    const startZ = -((perColumn - 1) * spacingZ) / 2;
+    const centerX = color === "w" ? this.tableDecor.rightTrayX : this.tableDecor.leftTrayX;
+    const colOffset = (col === 0 ? -1 : 1) * (spacingX / 2);
+    return new THREE.Vector3(centerX + colOffset, this.tableDecor.traySlotY, startZ + row * spacingZ);
   }
 
   private nextTraySlot(color: PieceColor): THREE.Vector3 {

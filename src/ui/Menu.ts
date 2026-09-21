@@ -78,7 +78,6 @@ export class Menu {
     this.el.innerHTML = `
       <video class="menu-bg-video hidden" autoplay muted loop playsinline></video>
       <div class="menu-bg-fallback"></div>
-      <div class="menu-bg-shield"></div>
       <div class="menu-veil"></div>
       <div class="menu-audio-controls">
         <button class="audio-toggle-btn" data-action="toggle-music" title="Музыка"></button>

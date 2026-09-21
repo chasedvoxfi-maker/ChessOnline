@@ -103,53 +103,19 @@ button {
   }
 }
 
-/* A darkened + blurred duplicate of the art, masked to fade in/out vertically so only the
-   middle band (where our menu panel sits, and where the key-art's own mock "Play/
-   Multiplayer/…" buttons live) is affected — the title band up top and the pieces/scenery
-   down low stay fully crisp underneath. Blur (not just darkening) is what actually kills the
-   mock labels' legibility: bright white text stays readable through a merely-darkened
-   backdrop, but not through a blurred one. */
-.menu-bg-shield {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-  background: url("/ChessOnline/menu-bg.webp") 20% top / cover no-repeat;
-  filter: brightness(0.4) saturate(1.08) blur(10px);
-  transform: scale(1.06);
-  -webkit-mask-image: linear-gradient(
-    180deg,
-    transparent 0%,
-    transparent 24%,
-    black 29%,
-    black 62%,
-    transparent 74%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    180deg,
-    transparent 0%,
-    transparent 24%,
-    black 29%,
-    black 62%,
-    transparent 74%,
-    transparent 100%
-  );
-}
-
 .menu-veil {
   position: absolute;
   inset: 0;
   z-index: 2;
-  /* just a gentle vignette — the shield layer above does the real work of hiding the mock
-     buttons; this only adds a touch of edge darkening for legibility at the very top/bottom */
+  /* a gentle vignette for edge legibility — the key-art's own mock "Play/Multiplayer/…"
+     buttons underneath are hidden by our own fully-opaque pill buttons sitting on top of them
+     (no blur layer involved: that trick was tried and explicitly didn't fly with the artwork). */
   background: radial-gradient(ellipse at center, rgba(6, 5, 12, 0) 40%, rgba(4, 3, 8, 0.35) 100%);
 }
 
 /* Wide/desktop screens get their own key-art: a dedicated 16:9 composition with the title
    top-center and an open water/sky gap between the forest and the castle — built specifically
-   to hold the menu, with no mock UI baked in, so the blur-shield trick above isn't needed here. */
+   to hold the menu. */
 @media (min-width: 700px) {
   .menu-bg-fallback {
     background:
@@ -157,9 +123,6 @@ button {
       radial-gradient(circle at 30% 20%, rgba(212, 175, 106, 0.16), transparent 55%),
       radial-gradient(circle at 75% 75%, rgba(90, 60, 160, 0.28), transparent 55%),
       linear-gradient(160deg, #0d0a18 0%, #171128 45%, #0a0812 100%);
-  }
-  .menu-bg-shield {
-    display: none;
   }
 }
 
@@ -253,19 +216,20 @@ button {
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8);
 }
 
-.join-link {
-  align-self: center;
-  color: var(--gold);
-  font-family: "Cinzel", serif;
-  letter-spacing: 0.02em;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8);
-}
 
 .menu-panel {
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  /* A flat, unblurred backing behind the whole button stack — no blur anywhere in this menu.
+     Each button is already opaque on its own; this just covers the narrow gaps between them
+     (and around them) so the key-art's own baked-in "Play/Multiplayer/…" mock labels don't
+     peek through there. */
+  padding: 0.6rem;
+  margin: -0.6rem;
+  border-radius: 26px;
+  background: rgba(6, 5, 10, 0.88);
 }
 
 /* Pill buttons styled after the key-art's own mock UI: a dark glass capsule, gold icon in a
@@ -393,6 +357,16 @@ button {
 }
 .back-btn:hover {
   color: var(--gold-bright);
+}
+
+.join-link {
+  align-self: center;
+  color: var(--gold);
+  font-family: "Cinzel", serif;
+  letter-spacing: 0.02em;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(6, 5, 10, 0.65);
 }
 
 .section-title {
@@ -952,8 +926,7 @@ button {
    sliver of the art — shift the crop to keep the title whole, and ease the menu's width/
    offset back in a little so it doesn't run into the screen edge. */
 @media (max-width: 520px) {
-  .menu-bg-fallback,
-  .menu-bg-shield {
+  .menu-bg-fallback {
     background-position: 42% top;
   }
   .menu-content {
