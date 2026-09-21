@@ -3,7 +3,7 @@ import { buildBoard } from "./board";
 import { createMaterials, PIECE_FACTORIES, addOutline, type PieceMaterials, type PieceFactory } from "./pieceModels";
 import { squareToWorld, worldToSquare } from "./coords";
 import { createSelectMarker, createLegalDot, createLastMoveMarker, CheckGlow, ConfettiSystem } from "./effects";
-import { buildTableDecor, TRAY_SPAN, TRAY_THICKNESS, type TableDecor } from "./tableDecor";
+import { buildTableDecor, type TableDecor } from "./tableDecor";
 import type { PieceColor } from "../game/types";
 
 interface ActiveAnim {
@@ -87,12 +87,12 @@ export class Board3D {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.toneMappingExposure = 1.55;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
 
     this.scene.background = bgGradientTexture();
-    this.scene.fog = new THREE.FogExp2(0x0d0a18, 0.045);
+    this.scene.fog = new THREE.FogExp2(0x0d0a18, 0.022);
 
     this.camera = new THREE.PerspectiveCamera(48, 1, 0.1, 100);
     this.updateCameraPosition();
@@ -132,10 +132,10 @@ export class Board3D {
   }
 
   private setupLights() {
-    const hemi = new THREE.HemisphereLight(0x8fa5ff, 0x2a1e14, 0.65);
+    const hemi = new THREE.HemisphereLight(0x8fa5ff, 0x4a3624, 1.0);
     this.scene.add(hemi);
 
-    const key = new THREE.DirectionalLight(0xfff2d8, 1.6);
+    const key = new THREE.DirectionalLight(0xfff2d8, 2.1);
     key.position.set(4.5, 9, 5.5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -148,11 +148,11 @@ export class Board3D {
     key.shadow.bias = -0.0015;
     this.scene.add(key);
 
-    const rim = new THREE.DirectionalLight(0x8ab4ff, 0.45);
+    const rim = new THREE.DirectionalLight(0x8ab4ff, 0.5);
     rim.position.set(-6, 4, -6);
     this.scene.add(rim);
 
-    const fill = new THREE.PointLight(0xffe3b8, 0.35, 20);
+    const fill = new THREE.PointLight(0xffe3b8, 0.5, 20);
     fill.position.set(-2, 3, 4);
     this.scene.add(fill);
   }
@@ -183,18 +183,6 @@ export class Board3D {
     [-4, 0.5, -4], [4, 0.5, -4], [-4, 0.5, 4], [4, 0.5, 4],
     [-0.5, 1.3, -4], [0.5, 1.3, -4], [-0.5, 1.3, 4], [0.5, 1.3, 4],
   ];
-
-  /** Outer corners of both captured-piece trays — only relevant (and only fitted for) table view. */
-  private trayFramingPoints(): [number, number, number][] {
-    const halfSpan = TRAY_SPAN / 2;
-    const halfThick = TRAY_THICKNESS / 2;
-    const y = -0.3;
-    const pts: [number, number, number][] = [];
-    for (const x of [this.tableDecor.leftTrayX, this.tableDecor.rightTrayX]) {
-      pts.push([x - halfThick, y, -halfSpan], [x + halfThick, y, -halfSpan], [x - halfThick, y, halfSpan], [x + halfThick, y, halfSpan]);
-    }
-    return pts;
-  }
 
   /**
    * The FOV that keeps every FRAMING_POINT inside the frustum for the camera's current
@@ -228,8 +216,11 @@ export class Board3D {
     const marginRad = (1.3 * Math.PI) / 180;
     let maxH = 0;
     let maxV = 0;
-    const points = this.tableMode ? [...Board3D.FRAMING_POINTS, ...this.trayFramingPoints()] : Board3D.FRAMING_POINTS;
-    for (const [px, py, pz] of points) {
+    // Trays deliberately aren't part of the "must fit" set: their own depth (Z) reads as a much
+    // larger vertical angle than the board's, which forced a wide-open FOV that left the board
+    // itself small in the middle of the frame. The board is what has to fill the screen; trays
+    // just get whatever's left and are cropped on narrow screens.
+    for (const [px, py, pz] of Board3D.FRAMING_POINTS) {
       const vx = px - Cx;
       const vy = py - Cy;
       const vz = pz - Cz;
@@ -264,16 +255,26 @@ export class Board3D {
    * pushed it far enough for the scene's exponential fog (tuned for ~9-10 units) to wash the
    * whole board out to near-invisible. Distance stays constant across every angle instead.
    */
-  private static readonly VIEW_PRESETS: Record<"angle" | "top", { elevationDeg: number; distance: number; lookZ: number }> = {
-    angle: { elevationDeg: 70, distance: 9.6, lookZ: 1.7 },
-    top: { elevationDeg: 62, distance: 9.6, lookZ: 1.7 },
+  private static readonly VIEW_PRESETS: Record<"angle" | "top", { elevationDeg: number; elevationFloorDeg: number; distance: number; lookZ: number }> = {
+    angle: { elevationDeg: 70, elevationFloorDeg: 42, distance: 9.6, lookZ: 1.7 },
+    top: { elevationDeg: 62, elevationFloorDeg: 34, distance: 9.6, lookZ: 1.7 },
   };
 
   private applyResponsiveFraming(aspect: number, height: number) {
     const portraitness = Math.max(0, Math.min(1, 1 - aspect)); // 0 on wide screens, up to ~1 on tall phones
     const shortScreen = aspect > 1.15 ? Math.max(0, Math.min(1, (560 - height) / 340)) : 0; // 0 at h>=560, 1 at h<=220
     const preset = Board3D.VIEW_PRESETS[this.tableMode ? "top" : "angle"];
-    const elevationRad = (preset.elevationDeg * Math.PI) / 180;
+    // A camera looking down a deep scene from a steep angle needs far more vertical FOV than
+    // horizontal (the board's front-to-back depth, plus piece height, projects mostly onto the
+    // screen's Y axis) — on a wide/short phone-landscape screen that vertical requirement leaves
+    // huge unused margin on the sides, so the board reads as small even though it technically
+    // "fits". Easing the elevation angle down on wide screens compresses that depth back toward
+    // the horizontal axis instead, trading a bit of "looking straight down" for a board that
+    // actually fills the width; square/portrait screens have vertical room to spare, so they keep
+    // the full requested angle.
+    const wideness = Math.max(0, Math.min(1, (aspect - 1.15) / (2.2 - 1.15)));
+    const elevationDeg = preset.elevationDeg - wideness * (preset.elevationDeg - preset.elevationFloorDeg);
+    const elevationRad = (elevationDeg * Math.PI) / 180;
     const distance = preset.distance - shortScreen * 0.8;
 
     this.camRadius = distance * Math.cos(elevationRad) + portraitness * 0.5;

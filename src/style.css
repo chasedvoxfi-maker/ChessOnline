@@ -909,6 +909,11 @@ button {
     height: 38px;
     font-size: 0.95rem;
   }
+  .app-version {
+    top: calc(0.9rem + env(safe-area-inset-top));
+    right: calc(0.8rem + env(safe-area-inset-right));
+    bottom: auto;
+  }
 }
 
 /* Narrow phones: the "20%" horizontal crop used on wide desktop screens leaves no room for
