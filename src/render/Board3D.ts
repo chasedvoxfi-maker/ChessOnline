@@ -266,7 +266,7 @@ export class Board3D {
    */
   private static readonly VIEW_PRESETS: Record<"angle" | "top", { elevationDeg: number; distance: number; lookZ: number }> = {
     angle: { elevationDeg: 70, distance: 9.6, lookZ: 1.7 },
-    top: { elevationDeg: 80, distance: 11, lookZ: 0.3 },
+    top: { elevationDeg: 62, distance: 9.6, lookZ: 1.7 },
   };
 
   private applyResponsiveFraming(aspect: number, height: number) {
