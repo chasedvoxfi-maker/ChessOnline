@@ -284,7 +284,8 @@ export class Menu {
   }
 
   private tableSwatchStyle(id: TableThemeId): string {
-    const url = renderPlankCanvas(id, 64).toDataURL();
+    // "light" is the real photo now — preview it directly instead of the procedural canvas.
+    const url = id === "light" ? "/ChessOnline/textures/table-photo.webp" : renderPlankCanvas(id, 64).toDataURL();
     return `background-image:url(${url});background-size:cover;`;
   }
 
