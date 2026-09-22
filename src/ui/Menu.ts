@@ -4,6 +4,20 @@ import type { CornersFormation } from "../corners/CornersGame";
 import { soundManager } from "../audio/SoundManager";
 import { musicManager } from "../audio/MusicManager";
 import { APP_VERSION } from "../version";
+import {
+  loadTheme,
+  saveTheme,
+  renderPlankCanvas,
+  TABLE_OPTIONS,
+  BOARD_OPTIONS,
+  BOARD_TEXTURE_PATH,
+  PIECE_OPTIONS,
+  PIECE_PRESETS,
+  type AppTheme,
+  type TableThemeId,
+  type BoardThemeId,
+  type PieceThemeId,
+} from "../render/theme";
 
 export interface MenuCallbacks {
   onStartHotseat: (game: GameKind, formation?: CornersFormation) => void;
@@ -52,6 +66,8 @@ const SVG_ICONS: Record<string, string> = {
     '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a9 9 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
   soundOff:
     '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M3 3l18 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  gear:
+    '<svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13.5c.04-.5.04-1 0-1.5l1.9-1.3-1.5-2.6-2.2.6a7.6 7.6 0 0 0-1.3-.75L15.9 6h-3l-.4 2.05c-.46.2-.9.45-1.3.75l-2.2-.6-1.5 2.6 1.9 1.3c-.04.5-.04 1 0 1.5l-1.9 1.3 1.5 2.6 2.2-.6c.4.3.84.55 1.3.75L12.9 20h3l.4-2.05c.46-.2.9-.45 1.3-.75l2.2.6 1.5-2.6-1.9-1.3Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
 };
 
 /** Wraps a text glyph or one of SVG_ICONS in the gold roundel badge used by every pill button. */
@@ -69,6 +85,7 @@ export class Menu {
   private continueInfo: Partial<Record<GameKind, ContinueInfo>>;
   private selectedGame: GameKind = "chess";
   private selectedFormation: CornersFormation = "rectangle";
+  private theme: AppTheme = loadTheme();
 
   constructor(callbacks: MenuCallbacks, continueInfo: Partial<Record<GameKind, ContinueInfo>> = {}) {
     this.callbacks = callbacks;
@@ -82,6 +99,7 @@ export class Menu {
       <div class="menu-audio-controls">
         <button class="audio-toggle-btn" data-action="toggle-music" title="Музыка"></button>
         <button class="audio-toggle-btn" data-action="toggle-sound" title="Звуки"></button>
+        <button class="audio-toggle-btn" data-action="open-settings" title="Настройки">${SVG_ICONS.gear}</button>
       </div>
       <div class="menu-content"></div>
       <div class="app-version">v${APP_VERSION}</div>
@@ -89,6 +107,10 @@ export class Menu {
     this.contentEl = this.el.querySelector(".menu-content")!;
     this.renderGamePicker();
     this.wireAudioControls();
+    this.el.querySelector('[data-action="open-settings"]')!.addEventListener("click", () => {
+      soundManager.playSelect();
+      this.renderSettingsPanel();
+    });
     musicManager.play("menu");
 
     const video = this.el.querySelector<HTMLVideoElement>(".menu-bg-video")!;
@@ -190,6 +212,81 @@ export class Menu {
       soundManager.playSelect();
       this.renderJoinPanel();
     });
+  }
+
+  /** Picks the look of the table, board and pieces for every future game — every option here is
+   * a variant that actually shipped at some point (see render/theme.ts). Applies from the next
+   * game started; there's no game running to update live while this screen is open. */
+  private renderSettingsPanel() {
+    this.contentEl.innerHTML = `
+      <div class="menu-panel settings-panel">
+        <button class="back-btn">← Назад</button>
+        <h2 class="section-title">Настройки внешнего вида</h2>
+
+        <div class="settings-group">
+          <h3 class="settings-group-title">Стол</h3>
+          <div class="settings-options">
+            ${TABLE_OPTIONS.map((o) => this.settingsOptionHtml("table", o.id, o.name, o.desc, this.tableSwatchStyle(o.id))).join("")}
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3 class="settings-group-title">Доска</h3>
+          <div class="settings-options">
+            ${BOARD_OPTIONS.map((o) => this.settingsOptionHtml("board", o.id, o.name, o.desc, this.boardSwatchStyle(o.id))).join("")}
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3 class="settings-group-title">Фигуры</h3>
+          <div class="settings-options">
+            ${PIECE_OPTIONS.map((o) => this.settingsOptionHtml("pieces", o.id, o.name, o.desc, this.pieceSwatchStyle(o.id))).join("")}
+          </div>
+        </div>
+
+        <p class="settings-note">Применится к следующей начатой партии.</p>
+      </div>
+    `;
+    this.wireEffects();
+    this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => this.renderGamePicker());
+    this.contentEl.querySelectorAll<HTMLButtonElement>(".settings-option").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        soundManager.playSelect();
+        const kind = btn.dataset.kind as "table" | "board" | "pieces";
+        const id = btn.dataset.id!;
+        if (kind === "table") this.theme.table = id as TableThemeId;
+        else if (kind === "board") this.theme.board = id as BoardThemeId;
+        else this.theme.pieces = id as PieceThemeId;
+        saveTheme(this.theme);
+        this.renderSettingsPanel();
+      });
+    });
+  }
+
+  private settingsOptionHtml(kind: "table" | "board" | "pieces", id: string, name: string, desc: string, swatchStyle: string): string {
+    const active = this.theme[kind] === id;
+    return `
+      <button class="settings-option ${active ? "active" : ""}" data-kind="${kind}" data-id="${id}">
+        <span class="settings-swatch" style="${swatchStyle}"></span>
+        <span class="settings-option-label">${name}<small>${desc}</small></span>
+        ${active ? '<span class="settings-check">✓</span>' : ""}
+      </button>`;
+  }
+
+  private tableSwatchStyle(id: TableThemeId): string {
+    const url = renderPlankCanvas(id, 64).toDataURL();
+    return `background-image:url(${url});background-size:cover;`;
+  }
+
+  private boardSwatchStyle(id: BoardThemeId): string {
+    return `background-image:url(${BOARD_TEXTURE_PATH[id]});background-size:cover;`;
+  }
+
+  private pieceSwatchStyle(id: PieceThemeId): string {
+    const preset = PIECE_PRESETS[id];
+    const base = `#${preset.color.toString(16).padStart(6, "0")}`;
+    const top = `#${preset.gradientTop.toString(16).padStart(6, "0")}`;
+    return `background:radial-gradient(circle at 35% 30%, ${top}, ${base} 75%);`;
   }
 
   private renderModeSelect() {

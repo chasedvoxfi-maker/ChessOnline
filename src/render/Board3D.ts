@@ -4,6 +4,7 @@ import { createMaterials, PIECE_FACTORIES, addOutline, type PieceMaterials, type
 import { squareToWorld, worldToSquare } from "./coords";
 import { createSelectMarker, createLegalDot, createLastMoveMarker, CheckGlow, ConfettiSystem } from "./effects";
 import { buildTableDecor, type TableDecor } from "./tableDecor";
+import { loadTheme, type AppTheme } from "./theme";
 import type { PieceColor } from "../game/types";
 
 interface ActiveAnim {
@@ -81,9 +82,12 @@ export class Board3D {
   interactionEnabled = true;
   onSquareClick: ((square: string) => void) | null = null;
 
-  constructor(container: HTMLElement, opts?: { pieceFactories?: Record<string, PieceFactory> }) {
+  constructor(container: HTMLElement, opts?: { pieceFactories?: Record<string, PieceFactory>; theme?: AppTheme }) {
     this.container = container;
-    this.materials = createMaterials();
+    // The look-and-feel picked on the Settings screen (main menu) — read fresh at construction
+    // time, so a new game always starts with whatever was last saved there.
+    const theme = opts?.theme ?? loadTheme();
+    this.materials = createMaterials(theme.pieces);
     this.pieceFactories = opts?.pieceFactories ?? PIECE_FACTORIES;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -103,13 +107,13 @@ export class Board3D {
 
     this.setupLights();
 
-    const { group: boardGroup, highlightLayer } = buildBoard();
+    const { group: boardGroup, highlightLayer } = buildBoard(theme.board);
     this.scene.add(boardGroup);
     this.highlightLayer = highlightLayer;
     this.scene.add(this.checkGlow.group);
     this.scene.add(this.confetti.group);
 
-    this.tableDecor = buildTableDecor();
+    this.tableDecor = buildTableDecor(theme.table);
     this.tableDecor.group.visible = false;
     this.scene.add(this.tableDecor.group);
     this.scene.add(this.capturedGroup);
@@ -382,7 +386,7 @@ export class Board3D {
   placePiece(square: string, type: string, color: PieceColor) {
     const factory = this.pieceFactories[type];
     const group = factory(this.materials, color);
-    if (color === "b") addOutline(group);
+    if (color === "b") addOutline(group, this.materials.outlineColor);
     group.scale.setScalar(0.95);
     const { x, z } = squareToWorld(square);
     group.position.set(x, 0, z);

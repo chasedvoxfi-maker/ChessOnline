@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { SQUARE_SIZE } from "./coords";
 import { loadPhotoTexture } from "./textureLoader";
+import { BOARD_TEXTURE_PATH, type BoardThemeId } from "./theme";
 
 /** A small flat coordinate glyph (file letter or rank number), printed on the frame like a real board. */
 function createCoordLabel(text: string): THREE.Mesh {
@@ -27,14 +28,14 @@ export interface BoardBuild {
   highlightLayer: THREE.Group;
 }
 
-export function buildBoard(): BoardBuild {
+export function buildBoard(boardTheme: BoardThemeId = "light"): BoardBuild {
   const group = new THREE.Group();
 
   // The playing surface is a single photo of a real board (perspective-corrected to a flat,
   // regular 8x8 grid before export) rather than 64 separately-colored squares — one texture,
   // one draw call, and every square gets its own bit of real wood grain instead of a repeated
   // swatch.
-  const surfaceTex = loadPhotoTexture("/ChessOnline/textures/board-surface.webp");
+  const surfaceTex = loadPhotoTexture(BOARD_TEXTURE_PATH[boardTheme]);
   const surfaceMat = new THREE.MeshPhysicalMaterial({ map: surfaceTex, roughness: 0.62, clearcoat: 0.08, metalness: 0 });
   const edgeMat = new THREE.MeshPhysicalMaterial({ color: 0x3a2416, roughness: 0.6, clearcoat: 0.1 });
   const slabGeo = new THREE.BoxGeometry(8 * SQUARE_SIZE, 0.12, 8 * SQUARE_SIZE);

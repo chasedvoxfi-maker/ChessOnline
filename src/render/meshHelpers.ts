@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { PIECE_PRESETS, type PieceThemeId } from "./theme";
 
 export function mesh(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
   const m = new THREE.Mesh(geo, mat);
@@ -10,10 +11,13 @@ export function mesh(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh
 export interface PieceMaterials {
   white: THREE.Material;
   black: THREE.Material;
+  /** Matches the "black" material's own tone, for addOutline() below. */
+  outlineColor: number;
 }
 
-/** Shared ivory/ebony piece materials used by every game (chess, checkers, corners). */
-export function createMaterials(): PieceMaterials {
+/** Shared ivory/dark-piece materials used by every game (chess, checkers, corners). */
+export function createMaterials(pieceTheme: PieceThemeId = "walnut-light"): PieceMaterials {
+  const preset = PIECE_PRESETS[pieceTheme];
   const white = new THREE.MeshPhysicalMaterial({
     color: 0xf3ecdd,
     roughness: 0.42,
@@ -22,21 +26,22 @@ export function createMaterials(): PieceMaterials {
     clearcoatRoughness: 0.4,
     reflectivity: 0.3,
   });
-  // Dark walnut wood rather than black plastic/glass: a warm brown base, matte-ish roughness
-  // (real varnished wood scatters light instead of throwing a sharp plastic-like highlight),
-  // and only a light clearcoat for a soft varnish sheen.
+  // Dark walnut wood rather than black plastic/glass by default: a warm brown base, matte-ish
+  // roughness (real varnished wood scatters light instead of throwing a sharp plastic-like
+  // highlight), and only a light clearcoat for a soft varnish sheen — the "classic-black" preset
+  // dials roughness/clearcoat back toward the original glossy-plastic look instead.
   const black = new THREE.MeshPhysicalMaterial({
-    color: 0x5a4028,
-    roughness: 0.6,
+    color: preset.color,
+    roughness: preset.roughness,
     metalness: 0.0,
-    clearcoat: 0.18,
-    clearcoatRoughness: 0.45,
-    reflectivity: 0.25,
+    clearcoat: preset.clearcoat,
+    clearcoatRoughness: preset.clearcoatRoughness,
+    reflectivity: preset.reflectivity,
   });
   // A subtle lighter-toward-the-top gradient, in world space so it reads correctly across
   // every sub-mesh of a piece (crown spikes, cross finials, ...), not just the main body.
   black.onBeforeCompile = (shader) => {
-    shader.uniforms.uGradientColor = { value: new THREE.Color(0x8f6a41) };
+    shader.uniforms.uGradientColor = { value: new THREE.Color(preset.gradientTop) };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying float vGradWorldY;")
       .replace(
@@ -50,7 +55,7 @@ export function createMaterials(): PieceMaterials {
         "#include <color_fragment>\n  float gradT = clamp(vGradWorldY / 1.3, 0.0, 1.0);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uGradientColor, gradT * 0.5);",
       );
   };
-  return { white, black };
+  return { white, black, outlineColor: preset.outline };
 }
 
 export function pickMat(mats: PieceMaterials, color: "w" | "b") {
@@ -65,7 +70,7 @@ export type PieceFactory = (mats: PieceMaterials, color: "w" | "b") => THREE.Gro
  * the silhouette gets a faint soft edge against a dark background without reading as a visible
  * contrasting ring around the piece.
  */
-export function addOutline(root: THREE.Object3D, color = 0x33240f, thickness = 0.01) {
+export function addOutline(root: THREE.Object3D, color: number, thickness = 0.01) {
   const targets: THREE.Mesh[] = [];
   root.traverse((obj) => {
     if (obj instanceof THREE.Mesh) targets.push(obj);

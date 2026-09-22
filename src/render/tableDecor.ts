@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { TABLE_PALETTES, type TableThemeId } from "./theme";
 
 /** Outer edge of the board+frame (see board.ts: 8 squares + 2×0.4 frame thickness). */
 const BOARD_OUTER_HALF = 4.4;
@@ -25,7 +26,7 @@ export interface TableDecor {
  * photo tile — a small photo tiled densely enough to cover the tabletop read as an obvious grid
  * of square "panels" instead of long boards. Tileable in both directions.
  */
-function lightPlankTexture(): THREE.Texture {
+function lightPlankTexture(theme: TableThemeId): THREE.Texture {
   const W = 1024;
   const H = 1024;
   const canvas = document.createElement("canvas");
@@ -35,7 +36,7 @@ function lightPlankTexture(): THREE.Texture {
 
   const plankCount = 9;
   const plankWidth = W / plankCount;
-  const palette = ["#e9cd9e", "#eed6ac", "#e4c48f", "#f0dab3", "#e6c896", "#ecd2a5"];
+  const { colors: palette, seam: seamColor } = TABLE_PALETTES[theme];
 
   for (let i = 0; i < plankCount; i++) {
     const x = i * plankWidth;
@@ -59,7 +60,7 @@ function lightPlankTexture(): THREE.Texture {
     }
 
     // seam between adjacent planks
-    ctx.fillStyle = "rgba(95,66,36,0.35)";
+    ctx.fillStyle = seamColor;
     ctx.fillRect(x, 0, 1.5, H);
   }
 
@@ -75,14 +76,14 @@ function lightPlankTexture(): THREE.Texture {
  * there's no separate tray box. Hidden by default — Board3D toggles the group's visibility via
  * setViewMode().
  */
-export function buildTableDecor(): TableDecor {
+export function buildTableDecor(tableTheme: TableThemeId = "light"): TableDecor {
   const group = new THREE.Group();
 
   // Large enough that the tabletop still fills every corner of the frame at the widest FOV /
   // shallowest camera angle the framing solver ever picks — a smaller plane let the scene's
   // background gradient peek through as jarring purple wedges in the far corners.
   const TABLE_SIZE = 90;
-  const tex = lightPlankTexture();
+  const tex = lightPlankTexture(tableTheme);
   const repeats = TABLE_SIZE / 9; // ~1 world unit per plank
   tex.repeat.set(repeats, repeats);
   const tableMat = new THREE.MeshPhysicalMaterial({ map: tex, roughness: 0.5, clearcoat: 0.15, clearcoatRoughness: 0.3 });
