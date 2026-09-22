@@ -60,7 +60,8 @@ export class Board3D {
   private lastMoveMarkers: THREE.Mesh[] = [];
 
   // Camera/skin mode — "angle" is the plain player eye-view, "table" and "topdown" both show
-  // the wooden tabletop + captured-piece trays, just from a shallower or a near-vertical angle.
+  // the wooden tabletop (captured pieces rest directly on it), just from a shallower or a
+  // near-vertical angle.
   private tableDecor: TableDecor;
   private viewMode: ViewMode = "angle";
   private capturedGroup = new THREE.Group();
@@ -139,10 +140,10 @@ export class Board3D {
     // less contrasty lighting — shadows stay present but lift off pure black, and highlights
     // stop looking like a single hard sun. Shadow softness comes from a larger PCF sample
     // radius on the key light below.
-    const hemi = new THREE.HemisphereLight(0x8fa5ff, 0x4a3624, 1.25);
+    const hemi = new THREE.HemisphereLight(0x8fa5ff, 0x4a3624, 1.5);
     this.scene.add(hemi);
 
-    const key = new THREE.DirectionalLight(0xfff2d8, 1.5);
+    const key = new THREE.DirectionalLight(0xfff2d8, 1.8);
     key.position.set(4.5, 9, 5.5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -163,6 +164,13 @@ export class Board3D {
     const fill = new THREE.PointLight(0xffe3b8, 0.6, 20);
     fill.position.set(-2, 3, 4);
     this.scene.add(fill);
+
+    // A soft, shadowless light aimed squarely down at the board specifically — the key/hemi
+    // lights already carry the whole scene, but the board is the one thing that always needs to
+    // read brightly and clearly whatever the camera angle, so it gets its own dedicated top-up.
+    const boardFill = new THREE.PointLight(0xfff6e6, 0.8, 14, 1.4);
+    boardFill.position.set(0, 5, 1);
+    this.scene.add(boardFill);
   }
 
   private handleResize = () => {
@@ -339,21 +347,22 @@ export class Board3D {
     return this.viewMode;
   }
 
-  private traySlotPosition(color: PieceColor, index: number): THREE.Vector3 {
+  /** Where the Nth captured piece of this color comes to rest, directly on the tabletop next to the board. */
+  private restSlotPosition(color: PieceColor, index: number): THREE.Vector3 {
     const perColumn = 8;
     const row = index % perColumn;
     const col = Math.floor(index / perColumn);
-    const spacingZ = 0.82;
-    const spacingX = 0.7;
+    const spacingZ = 0.78;
+    const spacingX = 0.62;
     const startZ = -((perColumn - 1) * spacingZ) / 2;
-    const centerX = color === "w" ? this.tableDecor.rightTrayX : this.tableDecor.leftTrayX;
+    const centerX = color === "w" ? this.tableDecor.rightRestX : this.tableDecor.leftRestX;
     const colOffset = (col === 0 ? -1 : 1) * (spacingX / 2);
-    return new THREE.Vector3(centerX + colOffset, this.tableDecor.traySlotY, startZ + row * spacingZ);
+    return new THREE.Vector3(centerX + colOffset, this.tableDecor.restY, startZ + row * spacingZ);
   }
 
-  private nextTraySlot(color: PieceColor): THREE.Vector3 {
+  private nextRestSlot(color: PieceColor): THREE.Vector3 {
     const index = this.capturedCounts[color]++;
-    return this.traySlotPosition(color, index);
+    return this.restSlotPosition(color, index);
   }
 
   private handleClick = (event: MouseEvent) => {
@@ -534,7 +543,7 @@ export class Board3D {
     const color = (mesh.userData as { color: PieceColor }).color;
 
     if (this.viewMode !== "angle") {
-      const to = this.nextTraySlot(color);
+      const to = this.nextRestSlot(color);
       this.anims.push({
         mesh,
         from,
@@ -543,7 +552,7 @@ export class Board3D {
         duration: 0.55,
         spin: (Math.random() - 0.5) * 4,
         fromScale: 0.95,
-        toScale: 0.44,
+        toScale: 0.55,
         elapsed: 0,
         onComplete: () => {
           this.capturedGroup.add(mesh); // reparents; three.js detaches it from the scene root first

@@ -16,9 +16,7 @@ function glyph(type: CapturedGlyphType, color: PieceColor) {
 
 const VIEW_MODE_KEY = "chessonline-view-mode-v2";
 const VIEW_MODE_ORDER: ViewMode[] = ["angle", "table", "topdown"];
-const VIEW_MODE_ICON: Record<ViewMode, string> = { angle: "🎥", table: "🪵", topdown: "🦅" };
-/** Labels the button with what tapping it will switch TO, not the mode it's currently in. */
-const VIEW_MODE_NEXT_LABEL: Record<ViewMode, string> = { angle: "Вид со столом", table: "Вид сверху", topdown: "Обычный вид" };
+const VIEW_MODE_NAME: Record<ViewMode, string> = { angle: "Обычный", table: "Стол", topdown: "Сверху" };
 
 function loadViewModePref(): ViewMode {
   try {
@@ -85,7 +83,6 @@ export class HUD {
           <div class="turn-label"><span class="turn-label-text">Ход белых</span><small class="turn-hint"></small></div>
         </div>
         <div class="hud-actions">
-          <button class="icon-btn" data-action="view" title=""></button>
           <button class="icon-btn" data-action="menu" title="Меню">☰</button>
         </div>
       </div>
@@ -93,6 +90,12 @@ export class HUD {
         ${rows.map((r) => `<button class="hud-menu-row" data-action="${r.action}"><span class="hud-menu-icon">${r.icon}</span><span class="hud-menu-label">${r.label}</span></button>`).join("")}
         <div class="hud-menu-divider"></div>
         <button class="hud-menu-row hud-menu-exit" data-action="exit"><span class="hud-menu-icon">🚪</span><span class="hud-menu-label">Выйти из игры</span></button>
+      </div>
+      <div class="cam-mode-widget">
+        <button class="cam-mode-btn" data-action="cam-up" title="Следующий вид камеры">▲</button>
+        <span class="cam-mode-current"></span>
+        <button class="cam-mode-btn" data-action="cam-down" title="Предыдущий вид камеры">▼</button>
+        <span class="cam-mode-caption">переключение камеры</span>
       </div>
       <div class="check-banner hidden">Шах!</div>
       <div style="flex:1"></div>
@@ -153,21 +156,22 @@ export class HUD {
       closeMenu();
     });
 
-    const viewBtn = this.el.querySelector<HTMLButtonElement>('[data-action="view"]')!;
+    const camCurrent = this.el.querySelector<HTMLSpanElement>(".cam-mode-current")!;
     let viewMode = loadViewModePref();
-    const applyViewBtn = () => {
-      viewBtn.textContent = VIEW_MODE_ICON[viewMode];
-      viewBtn.title = VIEW_MODE_NEXT_LABEL[viewMode];
+    const applyCamWidget = () => {
+      camCurrent.textContent = VIEW_MODE_NAME[viewMode];
     };
-    applyViewBtn();
-    this.callbacks.onViewToggle(viewMode); // apply the saved preference right away
-    viewBtn.addEventListener("click", () => {
+    const stepView = (delta: 1 | -1) => {
       const idx = VIEW_MODE_ORDER.indexOf(viewMode);
-      viewMode = VIEW_MODE_ORDER[(idx + 1) % VIEW_MODE_ORDER.length];
-      applyViewBtn();
+      viewMode = VIEW_MODE_ORDER[(idx + delta + VIEW_MODE_ORDER.length) % VIEW_MODE_ORDER.length];
+      applyCamWidget();
       saveViewModePref(viewMode);
       this.callbacks.onViewToggle(viewMode);
-    });
+    };
+    applyCamWidget();
+    this.callbacks.onViewToggle(viewMode); // apply the saved preference right away
+    this.el.querySelector('[data-action="cam-up"]')!.addEventListener("click", () => stepView(1));
+    this.el.querySelector('[data-action="cam-down"]')!.addEventListener("click", () => stepView(-1));
   }
 
   private handleUndo() {

@@ -26,7 +26,7 @@ export function createMaterials(): PieceMaterials {
   // (real varnished wood scatters light instead of throwing a sharp plastic-like highlight),
   // and only a light clearcoat for a soft varnish sheen.
   const black = new THREE.MeshPhysicalMaterial({
-    color: 0x3c2a1a,
+    color: 0x5a4028,
     roughness: 0.6,
     metalness: 0.0,
     clearcoat: 0.18,
@@ -36,7 +36,7 @@ export function createMaterials(): PieceMaterials {
   // A subtle lighter-toward-the-top gradient, in world space so it reads correctly across
   // every sub-mesh of a piece (crown spikes, cross finials, ...), not just the main body.
   black.onBeforeCompile = (shader) => {
-    shader.uniforms.uGradientColor = { value: new THREE.Color(0x76512f) };
+    shader.uniforms.uGradientColor = { value: new THREE.Color(0x8f6a41) };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying float vGradWorldY;")
       .replace(
@@ -65,7 +65,7 @@ export type PieceFactory = (mats: PieceMaterials, color: "w" | "b") => THREE.Gro
  * the silhouette gets a faint soft edge against a dark background without reading as a visible
  * contrasting ring around the piece.
  */
-export function addOutline(root: THREE.Object3D, color = 0x241a10, thickness = 0.01) {
+export function addOutline(root: THREE.Object3D, color = 0x33240f, thickness = 0.01) {
   const targets: THREE.Mesh[] = [];
   root.traverse((obj) => {
     if (obj instanceof THREE.Mesh) targets.push(obj);

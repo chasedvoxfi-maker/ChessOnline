@@ -1,69 +1,91 @@
 import * as THREE from "three";
-import { loadPhotoTexture } from "./textureLoader";
 
 /** Outer edge of the board+frame (see board.ts: 8 squares + 2×0.4 frame thickness). */
 const BOARD_OUTER_HALF = 4.4;
-
-/** Trays sit to the board's left/right: narrow across (X), long along the board's depth (Z). */
-export const TRAY_SPAN = 7.2;
-export const TRAY_THICKNESS = 1.7;
-const TRAY_WALL = 0.3;
-const TRAY_GAP = 0.35;
-export const TRAY_CENTER_X = BOARD_OUTER_HALF + TRAY_GAP + TRAY_THICKNESS / 2;
+const REST_GAP = 0.5;
+/** How far out (world X) captured pieces rest, just clear of the board's frame — there's no
+ * separate tray box any more, they simply stand on the tabletop itself. */
+const REST_CENTER_X = BOARD_OUTER_HALF + REST_GAP;
 const TABLE_Y = -0.64;
 
 export interface TableDecor {
   group: THREE.Group;
-  /** World X of the tray to the board's left. */
-  leftTrayX: number;
-  /** World X of the tray to the board's right. */
-  rightTrayX: number;
-  /** World Y a captured piece should rest at once placed in either tray. */
-  traySlotY: number;
-}
-
-function createTray(woodTexture: THREE.Texture): THREE.Group {
-  const group = new THREE.Group();
-
-  const woodMat = new THREE.MeshPhysicalMaterial({
-    map: woodTexture,
-    roughness: 0.65,
-    clearcoat: 0.08,
-  });
-  const outer = new THREE.Mesh(new THREE.BoxGeometry(TRAY_THICKNESS, TRAY_WALL, TRAY_SPAN), woodMat);
-  outer.position.y = TRAY_WALL / 2;
-  outer.castShadow = true;
-  outer.receiveShadow = true;
-  group.add(outer);
-
-  const feltMat = new THREE.MeshPhysicalMaterial({ color: 0x18120f, roughness: 0.95 });
-  const inset = 0.18;
-  const felt = new THREE.Mesh(new THREE.BoxGeometry(TRAY_THICKNESS - inset * 2, TRAY_WALL * 0.45, TRAY_SPAN - inset * 2), feltMat);
-  felt.position.y = TRAY_WALL * 0.85;
-  felt.receiveShadow = true;
-  group.add(felt);
-
-  return group;
+  /** World X where white's captures (black pieces) rest, to the board's right. */
+  rightRestX: number;
+  /** World X where black's captures (white pieces) rest, to the board's left. */
+  leftRestX: number;
+  /** World Y a captured piece rests at once set down on the tabletop. */
+  restY: number;
 }
 
 /**
- * A wooden tabletop under the board plus two shallow felt-lined trays to its left/right, for
- * captured pieces to be visually set into (the "table view" camera skin). Hidden by default —
- * Board3D toggles the group's visibility via setTableMode().
+ * Procedural light, warm hardwood-plank texture: long parallel boards, each its own slightly
+ * different honey tone, with fine lengthwise grain streaks and the occasional cross-seam where
+ * one board segment ends and the next begins. Built from flat fills rather than a repeating
+ * photo tile — a small photo tiled densely enough to cover the tabletop read as an obvious grid
+ * of square "panels" instead of long boards. Tileable in both directions.
+ */
+function lightPlankTexture(): THREE.Texture {
+  const W = 1024;
+  const H = 1024;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+
+  const plankCount = 9;
+  const plankWidth = W / plankCount;
+  const palette = ["#e9cd9e", "#eed6ac", "#e4c48f", "#f0dab3", "#e6c896", "#ecd2a5"];
+
+  for (let i = 0; i < plankCount; i++) {
+    const x = i * plankWidth;
+    ctx.fillStyle = palette[i % palette.length];
+    ctx.fillRect(x, 0, plankWidth, H);
+
+    // fine lengthwise grain streaks
+    for (let s = 0; s < 26; s++) {
+      const sx = x + Math.random() * plankWidth;
+      const sw = 0.6 + Math.random() * 1.8;
+      ctx.fillStyle = Math.random() > 0.5 ? "rgba(255,255,255,0.10)" : "rgba(120,84,45,0.10)";
+      ctx.fillRect(sx, 0, sw, H);
+    }
+
+    // one or two faint cross-seams where a board segment ends
+    const seams = 1 + Math.floor(Math.random() * 2);
+    for (let s = 0; s < seams; s++) {
+      const sy = Math.random() * H;
+      ctx.fillStyle = "rgba(110,78,42,0.22)";
+      ctx.fillRect(x + plankWidth * 0.05, sy, plankWidth * 0.9, 1.5);
+    }
+
+    // seam between adjacent planks
+    ctx.fillStyle = "rgba(95,66,36,0.35)";
+    ctx.fillRect(x, 0, 1.5, H);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * A light, warm wooden tabletop under the board — the "table" / "topdown" camera skins. Captured
+ * pieces rest directly on it, next to the board (see Board3D.restSlotPosition/nextRestSlot);
+ * there's no separate tray box. Hidden by default — Board3D toggles the group's visibility via
+ * setViewMode().
  */
 export function buildTableDecor(): TableDecor {
   const group = new THREE.Group();
-
-  const woodPhoto = loadPhotoTexture("/ChessOnline/textures/table-wood.webp");
-  woodPhoto.wrapS = woodPhoto.wrapT = THREE.RepeatWrapping;
 
   // Large enough that the tabletop still fills every corner of the frame at the widest FOV /
   // shallowest camera angle the framing solver ever picks — a smaller plane let the scene's
   // background gradient peek through as jarring purple wedges in the far corners.
   const TABLE_SIZE = 90;
-  const tableTex = woodPhoto.clone();
-  tableTex.repeat.set(21, 21);
-  const tableMat = new THREE.MeshPhysicalMaterial({ map: tableTex, roughness: 0.68, clearcoat: 0.06 });
+  const tex = lightPlankTexture();
+  const repeats = TABLE_SIZE / 9; // ~1 world unit per plank
+  tex.repeat.set(repeats, repeats);
+  const tableMat = new THREE.MeshPhysicalMaterial({ map: tex, roughness: 0.5, clearcoat: 0.15, clearcoatRoughness: 0.3 });
   const tableGeo = new THREE.PlaneGeometry(TABLE_SIZE, TABLE_SIZE);
   tableGeo.rotateX(-Math.PI / 2);
   const table = new THREE.Mesh(tableGeo, tableMat);
@@ -71,21 +93,10 @@ export function buildTableDecor(): TableDecor {
   table.receiveShadow = true;
   group.add(table);
 
-  const trayTex = woodPhoto.clone();
-  trayTex.repeat.set(1, 3);
-
-  const leftTray = createTray(trayTex);
-  leftTray.position.set(-TRAY_CENTER_X, TABLE_Y, 0);
-  group.add(leftTray);
-
-  const rightTray = createTray(trayTex);
-  rightTray.position.set(TRAY_CENTER_X, TABLE_Y, 0);
-  group.add(rightTray);
-
   return {
     group,
-    leftTrayX: -TRAY_CENTER_X,
-    rightTrayX: TRAY_CENTER_X,
-    traySlotY: TABLE_Y + TRAY_WALL * 0.85 + 0.06,
+    rightRestX: REST_CENTER_X,
+    leftRestX: -REST_CENTER_X,
+    restY: TABLE_Y + 0.02,
   };
 }
