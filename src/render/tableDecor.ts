@@ -27,8 +27,8 @@ function createTray(woodTexture: THREE.Texture): THREE.Group {
 
   const woodMat = new THREE.MeshPhysicalMaterial({
     map: woodTexture,
-    roughness: 0.55,
-    clearcoat: 0.2,
+    roughness: 0.65,
+    clearcoat: 0.08,
   });
   const outer = new THREE.Mesh(new THREE.BoxGeometry(TRAY_THICKNESS, TRAY_WALL, TRAY_SPAN), woodMat);
   outer.position.y = TRAY_WALL / 2;
@@ -57,10 +57,14 @@ export function buildTableDecor(): TableDecor {
   const woodPhoto = loadPhotoTexture("/ChessOnline/textures/table-wood.webp");
   woodPhoto.wrapS = woodPhoto.wrapT = THREE.RepeatWrapping;
 
+  // Large enough that the tabletop still fills every corner of the frame at the widest FOV /
+  // shallowest camera angle the framing solver ever picks — a smaller plane let the scene's
+  // background gradient peek through as jarring purple wedges in the far corners.
+  const TABLE_SIZE = 90;
   const tableTex = woodPhoto.clone();
-  tableTex.repeat.set(6, 6);
-  const tableMat = new THREE.MeshPhysicalMaterial({ map: tableTex, roughness: 0.6, clearcoat: 0.15 });
-  const tableGeo = new THREE.PlaneGeometry(26, 26);
+  tableTex.repeat.set(21, 21);
+  const tableMat = new THREE.MeshPhysicalMaterial({ map: tableTex, roughness: 0.68, clearcoat: 0.06 });
+  const tableGeo = new THREE.PlaneGeometry(TABLE_SIZE, TABLE_SIZE);
   tableGeo.rotateX(-Math.PI / 2);
   const table = new THREE.Mesh(tableGeo, tableMat);
   table.position.y = TABLE_Y;

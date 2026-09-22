@@ -20,6 +20,8 @@ interface ActiveAnim {
   onComplete?: () => void;
 }
 
+export type ViewMode = "angle" | "table" | "topdown";
+
 function easeInOutCubic(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
@@ -29,9 +31,9 @@ function bgGradientTexture(): THREE.Texture {
   canvas.width = canvas.height = 512;
   const ctx = canvas.getContext("2d")!;
   const grad = ctx.createRadialGradient(256, 200, 40, 256, 300, 420);
-  grad.addColorStop(0, "#2a2140");
-  grad.addColorStop(0.55, "#161226");
-  grad.addColorStop(1, "#070510");
+  grad.addColorStop(0, "#2e2436");
+  grad.addColorStop(0.55, "#1c1420");
+  grad.addColorStop(1, "#0d0910");
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 512, 512);
   return new THREE.CanvasTexture(canvas);
@@ -57,9 +59,10 @@ export class Board3D {
   private legalMarkers: THREE.Mesh[] = [];
   private lastMoveMarkers: THREE.Mesh[] = [];
 
-  // "table view" skin — wooden tabletop + captured-piece trays, toggled via setTableMode()
+  // Camera/skin mode — "angle" is the plain player eye-view, "table" and "topdown" both show
+  // the wooden tabletop + captured-piece trays, just from a shallower or a near-vertical angle.
   private tableDecor: TableDecor;
-  private tableMode = false;
+  private viewMode: ViewMode = "angle";
   private capturedGroup = new THREE.Group();
   private capturedCounts: Record<PieceColor, number> = { w: 0, b: 0 };
 
@@ -87,7 +90,7 @@ export class Board3D {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.55;
+    this.renderer.toneMappingExposure = 1.4;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
 
@@ -132,10 +135,14 @@ export class Board3D {
   }
 
   private setupLights() {
-    const hemi = new THREE.HemisphereLight(0x8fa5ff, 0x4a3624, 1.0);
+    // More ambient fill relative to the key light (a lower key:ambient ratio) reads as softer,
+    // less contrasty lighting — shadows stay present but lift off pure black, and highlights
+    // stop looking like a single hard sun. Shadow softness comes from a larger PCF sample
+    // radius on the key light below.
+    const hemi = new THREE.HemisphereLight(0x8fa5ff, 0x4a3624, 1.25);
     this.scene.add(hemi);
 
-    const key = new THREE.DirectionalLight(0xfff2d8, 2.1);
+    const key = new THREE.DirectionalLight(0xfff2d8, 1.5);
     key.position.set(4.5, 9, 5.5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -146,13 +153,14 @@ export class Board3D {
     key.shadow.camera.top = 7;
     key.shadow.camera.bottom = -7;
     key.shadow.bias = -0.0015;
+    key.shadow.radius = 4.5;
     this.scene.add(key);
 
-    const rim = new THREE.DirectionalLight(0x8ab4ff, 0.5);
+    const rim = new THREE.DirectionalLight(0x8ab4ff, 0.4);
     rim.position.set(-6, 4, -6);
     this.scene.add(rim);
 
-    const fill = new THREE.PointLight(0xffe3b8, 0.5, 20);
+    const fill = new THREE.PointLight(0xffe3b8, 0.6, 20);
     fill.position.set(-2, 3, 4);
     this.scene.add(fill);
   }
@@ -255,15 +263,21 @@ export class Board3D {
    * pushed it far enough for the scene's exponential fog (tuned for ~9-10 units) to wash the
    * whole board out to near-invisible. Distance stays constant across every angle instead.
    */
-  private static readonly VIEW_PRESETS: Record<"angle" | "top", { elevationDeg: number; elevationFloorDeg: number; distance: number; lookZ: number }> = {
+  private static readonly VIEW_PRESETS: Record<ViewMode, { elevationDeg: number; elevationFloorDeg: number; distance: number; lookZ: number }> = {
     angle: { elevationDeg: 70, elevationFloorDeg: 42, distance: 9.6, lookZ: 1.7 },
-    top: { elevationDeg: 62, elevationFloorDeg: 34, distance: 9.6, lookZ: 1.7 },
+    table: { elevationDeg: 62, elevationFloorDeg: 34, distance: 9.6, lookZ: 1.7 },
+    // Dead overhead, centered on the board (no near/far bias — lookZ: 0) rather than eased per
+    // aspect: with the look-at target centered, the board's own square footprint is already
+    // symmetric in the camera's H/V axes, so the FOV solver naturally frames it as a square
+    // filling the screen's shorter dimension, no extra tuning needed. 89° (not 90°) avoids the
+    // degenerate straight-down case where the camera's "right" axis is undefined.
+    topdown: { elevationDeg: 89, elevationFloorDeg: 89, distance: 8.6, lookZ: 0 },
   };
 
   private applyResponsiveFraming(aspect: number, height: number) {
     const portraitness = Math.max(0, Math.min(1, 1 - aspect)); // 0 on wide screens, up to ~1 on tall phones
     const shortScreen = aspect > 1.15 ? Math.max(0, Math.min(1, (560 - height) / 340)) : 0; // 0 at h>=560, 1 at h<=220
-    const preset = Board3D.VIEW_PRESETS[this.tableMode ? "top" : "angle"];
+    const preset = Board3D.VIEW_PRESETS[this.viewMode];
     // A camera looking down a deep scene from a steep angle needs far more vertical FOV than
     // horizontal (the board's front-to-back depth, plus piece height, projects mostly onto the
     // screen's Y axis) — on a wide/short phone-landscape screen that vertical requirement leaves
@@ -309,16 +323,20 @@ export class Board3D {
     this.camTransitioning = true;
   }
 
-  /** Toggles the wooden-table skin: a tabletop plus felt trays that captured pieces are set into. */
-  setTableMode(on: boolean) {
-    if (this.tableMode === on) return;
-    this.tableMode = on;
-    this.tableDecor.group.visible = on;
+  /**
+   * Switches camera/skin mode: "angle" is the plain player eye-view (no table), "table" is the
+   * raised wooden-table skin at a shallow overhead angle, "topdown" is the same table skin but
+   * dead overhead so the board reads as one large square.
+   */
+  setViewMode(mode: ViewMode) {
+    if (this.viewMode === mode) return;
+    this.viewMode = mode;
+    this.tableDecor.group.visible = mode !== "angle";
     this.handleResize();
   }
 
-  isTableMode() {
-    return this.tableMode;
+  getViewMode() {
+    return this.viewMode;
   }
 
   private traySlotPosition(color: PieceColor, index: number): THREE.Vector3 {
@@ -515,7 +533,7 @@ export class Board3D {
     const from = mesh.position.clone();
     const color = (mesh.userData as { color: PieceColor }).color;
 
-    if (this.tableMode) {
+    if (this.viewMode !== "angle") {
       const to = this.nextTraySlot(color);
       this.anims.push({
         mesh,

@@ -12,6 +12,7 @@ import { musicManager } from "./audio/MusicManager";
 import { loadSavedGame, clearSavedGame, type SavedGameState, type GameKind } from "./game/SaveGame";
 import type { CornersFormation } from "./corners/CornersGame";
 import type { Difficulty, GameMode } from "./game/types";
+import type { ViewMode } from "./render/Board3D";
 
 // The very first tap/click anywhere unlocks audio — belt-and-braces alongside the specific
 // menu/HUD buttons that also call unlock(), since a couple of mobile browsers (notably iOS
@@ -124,7 +125,7 @@ interface StartOpts {
 /** The HUD's action buttons (resign/rematch/save/undo) call identically-shaped methods on every game's controller. */
 function buildHud(
   mode: GameMode,
-  ctrl: { resign(): void; restart(): void; saveNow(): boolean; undo(): boolean; board: { setTableMode(on: boolean): void } },
+  ctrl: { resign(): void; restart(): void; saveNow(): boolean; undo(): boolean; board: { setViewMode(mode: ViewMode): void } },
 ): HUD {
   return new HUD(
     {
@@ -136,7 +137,7 @@ function buildHud(
       onMenu: () => showMenu(),
       onRematch: () => ctrl.restart(),
       onMuteToggle: () => {},
-      onViewToggle: (tableView) => ctrl.board.setTableMode(tableView),
+      onViewToggle: (mode) => ctrl.board.setViewMode(mode),
       onSave: () => ctrl.saveNow(),
       onUndo: () => ctrl.undo(),
     },

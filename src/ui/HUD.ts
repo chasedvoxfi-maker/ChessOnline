@@ -1,6 +1,7 @@
 import type { GameOverInfo, PieceColor, PieceType } from "../game/types";
 import { soundManager } from "../audio/SoundManager";
 import { musicManager } from "../audio/MusicManager";
+import type { ViewMode } from "../render/Board3D";
 
 /** "m" (checkers man) is the only non-chess type shown in the captured tray — Corners has no captures. */
 export type CapturedGlyphType = PieceType | "m";
@@ -13,19 +14,25 @@ function glyph(type: CapturedGlyphType, color: PieceColor) {
   return color === "w" ? WHITE_GLYPHS[type] : BLACK_GLYPHS[type];
 }
 
-const TABLE_VIEW_KEY = "chessonline-table-view-v1";
+const VIEW_MODE_KEY = "chessonline-view-mode-v2";
+const VIEW_MODE_ORDER: ViewMode[] = ["angle", "table", "topdown"];
+const VIEW_MODE_ICON: Record<ViewMode, string> = { angle: "🎥", table: "🪵", topdown: "🦅" };
+/** Labels the button with what tapping it will switch TO, not the mode it's currently in. */
+const VIEW_MODE_NEXT_LABEL: Record<ViewMode, string> = { angle: "Вид со столом", table: "Вид сверху", topdown: "Обычный вид" };
 
-function loadTableViewPref(): boolean {
+function loadViewModePref(): ViewMode {
   try {
-    return localStorage.getItem(TABLE_VIEW_KEY) === "1";
+    const v = localStorage.getItem(VIEW_MODE_KEY);
+    if (v === "angle" || v === "table" || v === "topdown") return v;
   } catch {
-    return false;
+    // best-effort only
   }
+  return "angle";
 }
 
-function saveTableViewPref(on: boolean) {
+function saveViewModePref(mode: ViewMode) {
   try {
-    localStorage.setItem(TABLE_VIEW_KEY, on ? "1" : "0");
+    localStorage.setItem(VIEW_MODE_KEY, mode);
   } catch {
     // best-effort only
   }
@@ -37,20 +44,19 @@ export interface HUDCallbacks {
   onMenu: () => void;
   onRematch: () => void;
   onMuteToggle: (muted: boolean) => void;
-  /** Switches between the default angled camera and the raised "table view" skin (wooden table + captured-piece trays). */
-  onViewToggle: (tableView: boolean) => void;
+  /** Switches between the plain angled view, the raised table skin, and the dead-overhead table skin. */
+  onViewToggle: (mode: ViewMode) => void;
   /** Persists the current game so it can be resumed later. Returns false if this game can't be saved (online). */
   onSave: () => boolean;
   /** Takes back one ply. Returns false if there was nothing to undo, or undo isn't available (online). */
   onUndo: () => boolean;
 }
 
-/**
- * Small screens — narrow portrait phones, or short landscape phones — can't fit seven icons
- * next to the turn indicator, so every action but the menu toggle stays hidden until tapped
- * open. Keep this in sync with the equivalent CSS media query below.
- */
-const COMPACT_HUD = "(max-width: 480px), (orientation: landscape) and (max-height: 520px)";
+interface MenuRowSpec {
+  action: string;
+  icon: string;
+  label: string;
+}
 
 export class HUD {
   el: HTMLDivElement;
@@ -62,6 +68,16 @@ export class HUD {
     this.isHotseat = opts.hotseat;
     this.el = document.createElement("div");
     this.el.className = "hud";
+
+    const rows: MenuRowSpec[] = [
+      ...(opts.undoable ? [{ action: "undo", icon: "↩️", label: "Отменить ход" }] : []),
+      ...(opts.saveable ? [{ action: "save", icon: "💾", label: "Сохранить игру" }] : []),
+      { action: "draw", icon: "🤝", label: "Предложить ничью" },
+      { action: "resign", icon: "🏳️", label: "Сдаться" },
+      { action: "music", icon: musicManager.isMuted() ? "🔕" : "🎵", label: musicManager.isMuted() ? "Включить музыку" : "Выключить музыку" },
+      { action: "mute", icon: soundManager.muted ? "🔇" : "🔊", label: soundManager.muted ? "Включить звук" : "Выключить звук" },
+    ];
+
     this.el.innerHTML = `
       <div class="hud-top">
         <div class="turn-indicator">
@@ -69,15 +85,14 @@ export class HUD {
           <div class="turn-label"><span class="turn-label-text">Ход белых</span><small class="turn-hint"></small></div>
         </div>
         <div class="hud-actions">
-          ${opts.undoable ? '<button class="icon-btn" data-action="undo" title="Отменить ход">↩️</button>' : ""}
-          ${opts.saveable ? '<button class="icon-btn" data-action="save" title="Сохранить игру">💾</button>' : ""}
-          <button class="icon-btn" data-action="draw" title="Ничья">🤝</button>
-          <button class="icon-btn" data-action="resign" title="Сдаться">🏳️</button>
-          <button class="icon-btn" data-action="view" title="Вид со столом"></button>
-          <button class="icon-btn" data-action="music" title="Музыка"></button>
-          <button class="icon-btn" data-action="mute" title="Звук"></button>
+          <button class="icon-btn" data-action="view" title=""></button>
           <button class="icon-btn" data-action="menu" title="Меню">☰</button>
         </div>
+      </div>
+      <div class="hud-menu-dropdown hidden">
+        ${rows.map((r) => `<button class="hud-menu-row" data-action="${r.action}"><span class="hud-menu-icon">${r.icon}</span><span class="hud-menu-label">${r.label}</span></button>`).join("")}
+        <div class="hud-menu-divider"></div>
+        <button class="hud-menu-row hud-menu-exit" data-action="exit"><span class="hud-menu-icon">🚪</span><span class="hud-menu-label">Выйти из игры</span></button>
       </div>
       <div class="check-banner hidden">Шах!</div>
       <div style="flex:1"></div>
@@ -88,57 +103,70 @@ export class HUD {
     `;
 
     const menuBtn = this.el.querySelector<HTMLButtonElement>('[data-action="menu"]')!;
-    const actions = this.el.querySelector<HTMLDivElement>(".hud-actions")!;
-    menuBtn.addEventListener("click", () => {
-      if (window.matchMedia(COMPACT_HUD).matches && !actions.classList.contains("expanded")) {
-        actions.classList.add("expanded");
-        return;
-      }
-      actions.classList.remove("expanded");
+    const dropdown = this.el.querySelector<HTMLDivElement>(".hud-menu-dropdown")!;
+    const closeMenu = () => dropdown.classList.add("hidden");
+    const toggleMenu = () => dropdown.classList.toggle("hidden");
+    menuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleMenu();
+    });
+    document.addEventListener("click", (e) => {
+      if (!dropdown.classList.contains("hidden") && !dropdown.contains(e.target as Node) && e.target !== menuBtn) closeMenu();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeMenu();
+    });
+
+    dropdown.querySelector('[data-action="resign"]')!.addEventListener("click", () => this.confirmResign());
+    dropdown.querySelector('[data-action="draw"]')?.addEventListener("click", () => {
+      this.callbacks.onOfferDraw?.();
+      closeMenu();
+    });
+    dropdown.querySelector('[data-action="save"]')?.addEventListener("click", () => this.handleSave());
+    dropdown.querySelector('[data-action="undo"]')?.addEventListener("click", () => {
+      this.handleUndo();
+      closeMenu();
+    });
+    dropdown.querySelector('[data-action="exit"]')!.addEventListener("click", () => {
+      closeMenu();
       this.callbacks.onMenu();
     });
-    // any other action collapses the toolbar back down once it's done its job
-    actions.addEventListener("click", (e) => {
-      const target = (e.target as HTMLElement).closest("button");
-      if (target && target !== menuBtn) actions.classList.remove("expanded");
-    });
-    this.el.querySelector('[data-action="resign"]')!.addEventListener("click", () => this.confirmResign());
-    this.el.querySelector('[data-action="draw"]')!.addEventListener("click", () => this.callbacks.onOfferDraw?.());
-    this.el.querySelector('[data-action="save"]')?.addEventListener("click", () => this.handleSave());
-    this.el.querySelector('[data-action="undo"]')?.addEventListener("click", () => this.handleUndo());
 
-    const viewBtn = this.el.querySelector<HTMLButtonElement>('[data-action="view"]')!;
-    let tableView = loadTableViewPref();
-    const applyViewBtn = () => {
-      viewBtn.textContent = tableView ? "🪵" : "🎥";
-      viewBtn.title = tableView ? "Обычный вид" : "Вид со столом";
-    };
-    applyViewBtn();
-    this.callbacks.onViewToggle(tableView); // apply the saved preference right away
-    viewBtn.addEventListener("click", () => {
-      tableView = !tableView;
-      applyViewBtn();
-      saveTableViewPref(tableView);
-      this.callbacks.onViewToggle(tableView);
-    });
-
-    const muteBtn = this.el.querySelector<HTMLButtonElement>('[data-action="mute"]')!;
-    muteBtn.textContent = soundManager.muted ? "🔇" : "🔊";
-    muteBtn.addEventListener("click", () => {
+    const muteRow = dropdown.querySelector<HTMLButtonElement>('[data-action="mute"]')!;
+    muteRow.addEventListener("click", () => {
       soundManager.unlock();
       const muted = !soundManager.muted;
-      muteBtn.textContent = muted ? "🔇" : "🔊";
+      muteRow.querySelector(".hud-menu-icon")!.textContent = muted ? "🔇" : "🔊";
+      muteRow.querySelector(".hud-menu-label")!.textContent = muted ? "Включить звук" : "Выключить звук";
       soundManager.setMuted(muted);
       this.callbacks.onMuteToggle(muted);
+      closeMenu();
     });
 
-    const musicBtn = this.el.querySelector<HTMLButtonElement>('[data-action="music"]')!;
-    musicBtn.textContent = musicManager.isMuted() ? "🔕" : "🎵";
-    musicBtn.addEventListener("click", () => {
+    const musicRow = dropdown.querySelector<HTMLButtonElement>('[data-action="music"]')!;
+    musicRow.addEventListener("click", () => {
       musicManager.unlock();
       const muted = !musicManager.isMuted();
-      musicBtn.textContent = muted ? "🔕" : "🎵";
+      musicRow.querySelector(".hud-menu-icon")!.textContent = muted ? "🔕" : "🎵";
+      musicRow.querySelector(".hud-menu-label")!.textContent = muted ? "Включить музыку" : "Выключить музыку";
       musicManager.setMuted(muted);
+      closeMenu();
+    });
+
+    const viewBtn = this.el.querySelector<HTMLButtonElement>('[data-action="view"]')!;
+    let viewMode = loadViewModePref();
+    const applyViewBtn = () => {
+      viewBtn.textContent = VIEW_MODE_ICON[viewMode];
+      viewBtn.title = VIEW_MODE_NEXT_LABEL[viewMode];
+    };
+    applyViewBtn();
+    this.callbacks.onViewToggle(viewMode); // apply the saved preference right away
+    viewBtn.addEventListener("click", () => {
+      const idx = VIEW_MODE_ORDER.indexOf(viewMode);
+      viewMode = VIEW_MODE_ORDER[(idx + 1) % VIEW_MODE_ORDER.length];
+      applyViewBtn();
+      saveViewModePref(viewMode);
+      this.callbacks.onViewToggle(viewMode);
     });
   }
 
@@ -149,32 +177,44 @@ export class HUD {
   }
 
   private handleSave() {
-    const btn = this.el.querySelector<HTMLButtonElement>('[data-action="save"]')!;
+    const row = this.el.querySelector<HTMLButtonElement>('[data-action="save"]')!;
+    const icon = row.querySelector(".hud-menu-icon")!;
+    const label = row.querySelector(".hud-menu-label")!;
     const ok = this.callbacks.onSave();
     soundManager.playSelect();
-    btn.textContent = ok ? "✅" : "🚫";
-    btn.disabled = true;
+    icon.textContent = ok ? "✅" : "🚫";
+    label.textContent = ok ? "Сохранено" : "Не удалось сохранить";
+    row.disabled = true;
     setTimeout(() => {
-      btn.textContent = "💾";
-      btn.disabled = false;
+      icon.textContent = "💾";
+      label.textContent = "Сохранить игру";
+      row.disabled = false;
     }, 1200);
+    this.el.querySelector(".hud-menu-dropdown")!.classList.add("hidden");
   }
 
   private confirmResign() {
-    const btn = this.el.querySelector<HTMLButtonElement>('[data-action="resign"]')!;
-    if (btn.dataset.confirm === "1") {
+    const row = this.el.querySelector<HTMLButtonElement>('[data-action="resign"]')!;
+    const icon = row.querySelector(".hud-menu-icon")!;
+    const label = row.querySelector(".hud-menu-label")!;
+    if (row.dataset.confirm === "1") {
+      row.dataset.confirm = "0";
+      icon.textContent = "🏳️";
+      label.textContent = "Сдаться";
+      row.classList.remove("confirm-pending");
+      this.el.querySelector(".hud-menu-dropdown")!.classList.add("hidden");
       this.callbacks.onResign();
       return;
     }
-    btn.dataset.confirm = "1";
-    btn.textContent = "⚠️";
-    btn.title = "Точно сдаться? Нажмите ещё раз";
-    btn.classList.add("confirm-pending");
+    row.dataset.confirm = "1";
+    icon.textContent = "⚠️";
+    label.textContent = "Точно сдаться? Нажмите ещё раз";
+    row.classList.add("confirm-pending");
     setTimeout(() => {
-      btn.dataset.confirm = "0";
-      btn.textContent = "🏳️";
-      btn.title = "Сдаться";
-      btn.classList.remove("confirm-pending");
+      row.dataset.confirm = "0";
+      icon.textContent = "🏳️";
+      label.textContent = "Сдаться";
+      row.classList.remove("confirm-pending");
     }, 3000);
   }
 

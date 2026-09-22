@@ -16,24 +16,27 @@ export interface PieceMaterials {
 export function createMaterials(): PieceMaterials {
   const white = new THREE.MeshPhysicalMaterial({
     color: 0xf3ecdd,
-    roughness: 0.32,
+    roughness: 0.42,
     metalness: 0.02,
-    clearcoat: 0.55,
-    clearcoatRoughness: 0.25,
-    reflectivity: 0.4,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.4,
+    reflectivity: 0.3,
   });
+  // Dark walnut wood rather than black plastic/glass: a warm brown base, matte-ish roughness
+  // (real varnished wood scatters light instead of throwing a sharp plastic-like highlight),
+  // and only a light clearcoat for a soft varnish sheen.
   const black = new THREE.MeshPhysicalMaterial({
-    color: 0x2a2018,
-    roughness: 0.28,
-    metalness: 0.05,
-    clearcoat: 0.6,
-    clearcoatRoughness: 0.2,
-    reflectivity: 0.5,
+    color: 0x3c2a1a,
+    roughness: 0.6,
+    metalness: 0.0,
+    clearcoat: 0.18,
+    clearcoatRoughness: 0.45,
+    reflectivity: 0.25,
   });
   // A subtle lighter-toward-the-top gradient, in world space so it reads correctly across
   // every sub-mesh of a piece (crown spikes, cross finials, ...), not just the main body.
   black.onBeforeCompile = (shader) => {
-    shader.uniforms.uGradientColor = { value: new THREE.Color(0x5a4632) };
+    shader.uniforms.uGradientColor = { value: new THREE.Color(0x76512f) };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying float vGradWorldY;")
       .replace(
@@ -62,7 +65,7 @@ export type PieceFactory = (mats: PieceMaterials, color: "w" | "b") => THREE.Gro
  * the silhouette gets a faint soft edge against a dark background without reading as a visible
  * contrasting ring around the piece.
  */
-export function addOutline(root: THREE.Object3D, color = 0x413c48, thickness = 0.01) {
+export function addOutline(root: THREE.Object3D, color = 0x241a10, thickness = 0.01) {
   const targets: THREE.Mesh[] = [];
   root.traverse((obj) => {
     if (obj instanceof THREE.Mesh) targets.push(obj);
