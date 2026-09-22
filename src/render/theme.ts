@@ -52,46 +52,17 @@ export function saveTheme(theme: AppTheme) {
   }
 }
 
-/** Table plank palettes, shared by the 3D texture generator (tableDecor.ts) and the settings
- * screen's swatch preview, so the preview is pixel-accurate rather than an approximation. */
-export const TABLE_PALETTES: Record<TableThemeId, { colors: string[]; seam: string }> = {
-  light: {
-    colors: ["#e9cd9e", "#eed6ac", "#e4c48f", "#f0dab3", "#e6c896", "#ecd2a5"],
-    seam: "rgba(95, 66, 36, 0.35)",
-  },
-  dark: {
-    colors: ["#6b4a2e", "#5c3f26", "#74522f", "#654428", "#5f4227", "#70502e"],
-    seam: "rgba(35, 22, 10, 0.5)",
-  },
+/** Table photo textures, shared by the 3D scene (tableDecor.ts, tiled with mirrored wrapping)
+ * and the settings screen's swatch preview, so the preview matches exactly. */
+export const TABLE_TEXTURE_PATH: Record<TableThemeId, string> = {
+  light: "/ChessOnline/textures/table-photo.webp",
+  dark: "/ChessOnline/textures/table-photo-dark.webp",
 };
 
 export const TABLE_OPTIONS: { id: TableThemeId; name: string; desc: string }[] = [
   { id: "light", name: "Светлый дуб", desc: "тёплые светлые доски стола" },
   { id: "dark", name: "Тёмный орех", desc: "тёмные доски стола" },
 ];
-
-/**
- * Draws the same long-plank pattern buildTableDecor() turns into a 3D texture, as a plain
- * canvas — shared so the Settings screen's preview swatch is pixel-accurate instead of an
- * approximation, without pulling three.js into this module.
- */
-export function renderPlankCanvas(theme: TableThemeId, size = 128): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  const plankCount = 6;
-  const plankWidth = size / plankCount;
-  const { colors: palette, seam: seamColor } = TABLE_PALETTES[theme];
-
-  for (let i = 0; i < plankCount; i++) {
-    const x = i * plankWidth;
-    ctx.fillStyle = palette[i % palette.length];
-    ctx.fillRect(x, 0, plankWidth, size);
-    ctx.fillStyle = seamColor;
-    ctx.fillRect(x, 0, 1, size);
-  }
-  return canvas;
-}
 
 /** Board photo textures — the "light" one is the current, warmth-lifted version; "dark" is the
  * original perspective-corrected photo before that adjustment, kept as a moodier alternative. */

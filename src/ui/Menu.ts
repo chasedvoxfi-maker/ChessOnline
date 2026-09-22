@@ -7,8 +7,8 @@ import { APP_VERSION } from "../version";
 import {
   loadTheme,
   saveTheme,
-  renderPlankCanvas,
   TABLE_OPTIONS,
+  TABLE_TEXTURE_PATH,
   BOARD_OPTIONS,
   BOARD_TEXTURE_PATH,
   PIECE_OPTIONS,
@@ -284,9 +284,7 @@ export class Menu {
   }
 
   private tableSwatchStyle(id: TableThemeId): string {
-    // "light" is the real photo now — preview it directly instead of the procedural canvas.
-    const url = id === "light" ? "/ChessOnline/textures/table-photo.webp" : renderPlankCanvas(id, 64).toDataURL();
-    return `background-image:url(${url});background-size:cover;`;
+    return `background-image:url(${TABLE_TEXTURE_PATH[id]});background-size:cover;`;
   }
 
   private boardSwatchStyle(id: BoardThemeId): string {
