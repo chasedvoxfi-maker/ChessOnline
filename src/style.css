@@ -265,6 +265,94 @@ button {
   margin: 0;
 }
 
+.music-theme-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.music-theme-block:last-of-type {
+  margin-bottom: 0;
+}
+
+.music-theme-label {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.music-track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.music-track-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid rgba(212, 175, 106, 0.22);
+  background: rgba(8, 6, 12, 0.7);
+}
+
+.music-track-title {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-track-remove {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 8px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.music-track-remove:hover {
+  color: var(--gold-bright);
+  background: rgba(212, 175, 106, 0.12);
+}
+
+.music-track-empty {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.music-add-btn {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border-radius: 12px;
+  border: 1px dashed rgba(212, 175, 106, 0.4);
+  color: var(--gold);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.music-add-btn:hover {
+  border-color: var(--gold-bright);
+  background: rgba(212, 175, 106, 0.08);
+}
+
+.music-add-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .menu-content {
   position: relative;
   z-index: 3;

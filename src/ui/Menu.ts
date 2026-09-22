@@ -2,7 +2,8 @@ import type { Difficulty } from "../game/types";
 import type { GameKind } from "../game/SaveGame";
 import type { CornersFormation } from "../corners/CornersGame";
 import { soundManager } from "../audio/SoundManager";
-import { musicManager } from "../audio/MusicManager";
+import { musicManager, type MusicTheme } from "../audio/MusicManager";
+import { trackLibraryReady, addCustomTrack, removeCustomTrack, isCustomTrack } from "../audio/trackLibrary";
 import { APP_VERSION } from "../version";
 import {
   loadTheme,
@@ -277,8 +278,11 @@ export class Menu {
   /** Picks the look of the table, board and pieces for every future game — every option here is
    * a variant that actually shipped at some point (see render/theme.ts). Applies from the next
    * game started; there's no game running to update live while this screen is open. */
-  private renderSettingsPanel() {
+  private async renderSettingsPanel() {
     this.showLauncher(false);
+    // Usually already resolved (kicked off at app bootstrap) — only a real wait the very first
+    // time settings opens before the bundled-track probe + IndexedDB load finish.
+    await trackLibraryReady();
     this.contentEl.innerHTML = `
       <div class="menu-panel settings-panel">
         <button class="back-btn">← Назад</button>
@@ -312,7 +316,14 @@ export class Menu {
           </div>
         </div>
 
-        <p class="settings-note">Применится к следующей начатой партии.</p>
+        <div class="settings-group">
+          <h3 class="settings-group-title">Музыка</h3>
+          ${this.musicThemeBlockHtml("menu", "Главное меню")}
+          ${this.musicThemeBlockHtml("game", "Во время партии")}
+          <p class="settings-note">Загруженные треки хранятся только в этом браузере и не передаются никуда.</p>
+        </div>
+
+        <p class="settings-note">Внешний вид применится к следующей начатой партии.</p>
       </div>
     `;
     this.wireEffects();
@@ -327,6 +338,59 @@ export class Menu {
         else if (kind === "pieceColor") this.theme.pieceColor = id as PieceColorId;
         else this.theme.pieceFinish = id as PieceFinishId;
         saveTheme(this.theme);
+        this.renderSettingsPanel();
+      });
+    });
+    this.wireMusicSection();
+  }
+
+  private static escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+  }
+
+  private musicThemeBlockHtml(theme: MusicTheme, label: string): string {
+    const tracks = musicManager.getTracks(theme);
+    const rows = tracks.length
+      ? tracks
+          .map(
+            (t) => `
+        <div class="music-track-row">
+          <span class="music-track-title">${Menu.escapeHtml(t.title)}</span>
+          ${isCustomTrack(t.id) ? `<button class="music-track-remove" data-remove-theme="${theme}" data-remove-id="${t.id}" title="Удалить трек">✕</button>` : ""}
+        </div>`,
+          )
+          .join("")
+      : `<p class="music-track-empty">Треков нет — играет фоновая мелодия</p>`;
+    return `
+      <div class="music-theme-block">
+        <p class="music-theme-label">${label}</p>
+        <div class="music-track-list">${rows}</div>
+        <label class="music-add-btn">
+          <span class="music-add-icon">+</span> Добавить трек
+          <input type="file" accept="audio/*" data-add-theme="${theme}" hidden />
+        </label>
+      </div>`;
+  }
+
+  private wireMusicSection() {
+    this.contentEl.querySelectorAll<HTMLButtonElement>(".music-track-remove").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        soundManager.playSelect();
+        const theme = btn.dataset.removeTheme as MusicTheme;
+        const id = btn.dataset.removeId!;
+        await removeCustomTrack(theme, id);
+        this.renderSettingsPanel();
+      });
+    });
+    this.contentEl.querySelectorAll<HTMLInputElement>("[data-add-theme]").forEach((input) => {
+      input.addEventListener("click", (e) => e.stopPropagation());
+      input.addEventListener("change", async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        this.unlockAudio();
+        const theme = input.dataset.addTheme as MusicTheme;
+        await addCustomTrack(theme, file);
+        soundManager.playSelect();
         this.renderSettingsPanel();
       });
     });

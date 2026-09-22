@@ -9,6 +9,7 @@ import { HUD } from "./ui/HUD";
 import { RotateGate, tryLockLandscape } from "./ui/RotateGate";
 import { soundManager } from "./audio/SoundManager";
 import { musicManager } from "./audio/MusicManager";
+import { trackLibraryReady } from "./audio/trackLibrary";
 import { loadSavedGame, clearSavedGame, type SavedGameState, type GameKind } from "./game/SaveGame";
 import type { CornersFormation } from "./corners/CornersGame";
 import type { Difficulty, GameMode } from "./game/types";
@@ -25,6 +26,12 @@ window.addEventListener(
   },
   { once: true, capture: true },
 );
+
+// Kicked off as early as possible so the HEAD-probe of the bundled menu-music-N.mp3 slots (and
+// any locally-stored custom tracks) are usually resolved by the time Settings is first opened;
+// playback itself doesn't wait on this — MusicManager already skips a not-yet-probed missing
+// track to the next one in the list.
+void trackLibraryReady();
 
 const app = document.getElementById("app")!;
 

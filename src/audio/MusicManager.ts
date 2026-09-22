@@ -152,6 +152,29 @@ export class MusicManager {
     return TRACKS[theme];
   }
 
+  /**
+   * Call after TRACKS[theme] changes at runtime (a custom track was added/removed — see
+   * trackLibrary.ts). If that theme is currently playing, restarts it so the new list takes
+   * effect immediately instead of waiting for the current track to end or the theme to switch.
+   */
+  notifyTracksChanged(theme: MusicTheme) {
+    const list = TRACKS[theme];
+    if (!list.length) {
+      this.trackIndexInitialized[theme] = false;
+    } else if (this.trackIndex[theme] >= list.length) {
+      this.trackIndex[theme] = list.length - 1;
+    }
+    if (this.theme !== theme || !this.unlocked) return;
+    this.generation++;
+    this.stopVoices();
+    this.stopFile();
+    if (!this.trackIndexInitialized[theme] && list.length) {
+      this.trackIndex[theme] = list.length - 1; // jump straight to the just-added track
+      this.trackIndexInitialized[theme] = true;
+    }
+    this.tryPlayFile(theme, this.generation);
+  }
+
   getCurrentTrackId(theme: MusicTheme): string | null {
     const list = TRACKS[theme];
     if (!list.length) return null;
@@ -183,14 +206,17 @@ export class MusicManager {
   }
 
   /**
-   * Tries to play the theme's current playlist track; falls back to the generative pad if none
-   * exists. Doesn't loop the single file — instead advances to the next track in the playlist
+   * Tries to play the theme's current playlist track; falls back to the generative pad only once
+   * every track in the list has failed to load (e.g. a numbered menu-music-N.mp3 slot that has no
+   * file behind it yet — see tracks.ts). A missing/broken track is skipped to the next one instead
+   * of aborting the whole playlist, so a partially-filled 10-slot menu list still plays whichever
+   * slots are actually present. Doesn't loop the single file — instead advances to the next track
    * (wrapping back to the start) once this one ends, so a real playlist actually cycles through
    * every track rather than repeating the same one forever.
    */
-  private tryPlayFile(theme: MusicTheme, generation: number) {
+  private tryPlayFile(theme: MusicTheme, generation: number, attempt = 0) {
     const list = TRACKS[theme];
-    if (!list.length) {
+    if (!list.length || attempt >= list.length) {
       this.ensureContext();
       this.scheduleChord(theme, generation);
       this.scheduleSparkle(theme, generation);
@@ -200,23 +226,22 @@ export class MusicManager {
     const audio = new Audio(track.src);
     audio.volume = this.muted ? 0 : this.volume;
     this.fileEl = audio;
-    let fallenBack = false;
-    const fallbackToGenerative = () => {
-      if (fallenBack || generation !== this.generation) return;
-      fallenBack = true;
+    let handled = false;
+    audio.addEventListener("error", () => {
+      if (handled || generation !== this.generation) return;
+      handled = true;
       if (this.fileEl === audio) this.fileEl = null;
-      this.ensureContext();
-      this.scheduleChord(theme, generation);
-      this.scheduleSparkle(theme, generation);
-    };
-    audio.addEventListener("error", fallbackToGenerative);
+      this.trackIndex[theme] = (this.trackIndex[theme] + 1) % list.length;
+      this.tryPlayFile(theme, generation, attempt + 1);
+    });
     audio.addEventListener("ended", () => {
-      if (generation !== this.generation) return; // superseded by a theme switch or manual track pick
+      if (handled || generation !== this.generation) return; // superseded by a theme switch or manual track pick
+      handled = true;
       this.trackIndex[theme] = (this.trackIndex[theme] + 1) % list.length;
       this.tryPlayFile(theme, generation);
     });
     // autoplay may be blocked until unlock() runs from a user gesture — that's not a
-    // missing-file case, so it must never trigger the generative fallback.
+    // missing-file case, so it must never trigger the skip/fallback logic.
     audio.play().catch(() => {});
   }
 
