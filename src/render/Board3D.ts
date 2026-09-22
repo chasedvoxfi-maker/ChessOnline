@@ -336,6 +336,16 @@ export class Board3D {
   }
 
   /**
+   * Manually rotates the camera 180° from wherever it currently sits — a quick way to peek at
+   * the position from the opponent's side. Independent of the automatic per-turn flip in
+   * hotseat: the next turn change (or manual setOrientation) simply overrides it again.
+   */
+  flipCamera() {
+    this.camAngleTarget = this.camAngle + Math.PI;
+    this.camTransitioning = true;
+  }
+
+  /**
    * Switches camera/skin mode: "angle" is the plain player eye-view (no table), "table" is the
    * raised wooden-table skin at a shallow overhead angle, "topdown" is the same table skin but
    * dead overhead so the board reads as one large square.

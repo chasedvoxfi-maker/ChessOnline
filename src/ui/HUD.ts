@@ -44,6 +44,8 @@ export interface HUDCallbacks {
   onMuteToggle: (muted: boolean) => void;
   /** Switches between the plain angled view, the raised table skin, and the dead-overhead table skin. */
   onViewToggle: (mode: ViewMode) => void;
+  /** Manually rotates the camera 180° to peek at the position from the opponent's side. */
+  onFlipCamera: () => void;
   /** Persists the current game so it can be resumed later. Returns false if this game can't be saved (online). */
   onSave: () => boolean;
   /** Takes back one ply. Returns false if there was nothing to undo, or undo isn't available (online). */
@@ -96,6 +98,9 @@ export class HUD {
         <span class="cam-mode-current"></span>
         <button class="cam-mode-btn" data-action="cam-down" title="Предыдущий вид камеры">▼</button>
         <span class="cam-mode-caption">переключение камеры</span>
+        <div class="cam-mode-divider"></div>
+        <button class="cam-mode-btn cam-flip-btn" data-action="cam-flip" title="Перевернуть камеру на сторону соперника">🔄</button>
+        <span class="cam-mode-caption">переворот камеры<br />на сторону соперника</span>
       </div>
       <div class="check-banner hidden">Шах!</div>
       <div style="flex:1"></div>
@@ -172,6 +177,7 @@ export class HUD {
     this.callbacks.onViewToggle(viewMode); // apply the saved preference right away
     this.el.querySelector('[data-action="cam-up"]')!.addEventListener("click", () => stepView(1));
     this.el.querySelector('[data-action="cam-down"]')!.addEventListener("click", () => stepView(-1));
+    this.el.querySelector('[data-action="cam-flip"]')!.addEventListener("click", () => this.callbacks.onFlipCamera());
   }
 
   private handleUndo() {

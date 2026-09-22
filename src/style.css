@@ -948,6 +948,19 @@ button {
   max-width: 44px;
 }
 
+.cam-mode-divider {
+  width: 100%;
+  height: 1px;
+  margin: 0.15rem 0;
+  background: var(--panel-border);
+}
+
+.cam-flip-btn {
+  width: 32px;
+  height: 28px;
+  font-size: 1rem;
+}
+
 .captured-trays {
   pointer-events: none;
   display: flex;
