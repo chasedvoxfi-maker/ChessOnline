@@ -90,6 +90,15 @@ export class HUD {
       </div>
       <div class="hud-menu-dropdown hidden">
         ${rows.map((r) => `<button class="hud-menu-row" data-action="${r.action}"><span class="hud-menu-icon">${r.icon}</span><span class="hud-menu-label">${r.label}</span></button>`).join("")}
+        <label class="hud-menu-row hud-track-row">
+          <span class="hud-menu-icon">🎼</span>
+          <select class="hud-track-select" data-action="track-select" aria-label="Трек музыки">
+            ${musicManager
+              .getTracks("game")
+              .map((t) => `<option value="${t.id}">${t.title}</option>`)
+              .join("")}
+          </select>
+        </label>
         <div class="hud-menu-divider"></div>
         <button class="hud-menu-row hud-menu-exit" data-action="exit"><span class="hud-menu-icon">🚪</span><span class="hud-menu-label">Выйти из игры</span></button>
       </div>
@@ -159,6 +168,16 @@ export class HUD {
       musicRow.querySelector(".hud-menu-label")!.textContent = muted ? "Включить музыку" : "Выключить музыку";
       musicManager.setMuted(muted);
       closeMenu();
+    });
+
+    // Picking a track jumps straight to it; it keeps cycling through the rest of the playlist
+    // from there as each track ends, same as the automatic random-start behavior.
+    const trackSelect = dropdown.querySelector<HTMLSelectElement>('[data-action="track-select"]')!;
+    trackSelect.value = musicManager.getCurrentTrackId("game") ?? "";
+    trackSelect.addEventListener("click", (e) => e.stopPropagation());
+    trackSelect.addEventListener("change", () => {
+      musicManager.unlock();
+      musicManager.selectTrack("game", trackSelect.value);
     });
 
     const camCurrent = this.el.querySelector<HTMLSpanElement>(".cam-mode-current")!;

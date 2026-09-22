@@ -22,14 +22,14 @@ export function createMaterials(pieceTheme: PieceThemeId = "walnut-light"): Piec
     color: 0xf3ecdd,
     roughness: 0.42,
     metalness: 0.02,
-    clearcoat: 0.3,
-    clearcoatRoughness: 0.4,
-    reflectivity: 0.3,
+    clearcoat: 0.55,
+    clearcoatRoughness: 0.15,
+    reflectivity: 0.4,
   });
-  // Dark walnut wood rather than black plastic/glass by default: a warm brown base, matte-ish
-  // roughness (real varnished wood scatters light instead of throwing a sharp plastic-like
-  // highlight), and only a light clearcoat for a soft varnish sheen — the "classic-black" preset
-  // dials roughness/clearcoat back toward the original glossy-plastic look instead.
+  // Dark walnut wood rather than black plastic/glass by default: a warm brown base with a
+  // wood-like matte roughness underneath, but a strong, tight clearcoat on top for a proper
+  // lacquered gleam — real varnished wood still throws a crisp highlight, it just does it over a
+  // matte diffuse base rather than a shiny one.
   const black = new THREE.MeshPhysicalMaterial({
     color: preset.color,
     roughness: preset.roughness,

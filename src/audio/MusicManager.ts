@@ -1,20 +1,18 @@
 /**
- * Background music. If a real track is dropped in public/audio/ (see CUSTOM_TRACKS below),
- * that file is played directly; otherwise it falls back to a generative ambient pad synthesized
- * in real time via the Web Audio API — a slow, softly overlapping pad of detuned tones drawn
- * from a fixed scale, so chord changes always sound consonant no matter which notes get
- * picked, plus (for the menu) occasional high "sparkle" notes for a little sense of magic.
+ * Background music. If real tracks are dropped in public/audio/ (see tracks.ts), they're played
+ * directly, picking a random track to start each theme's playlist and cycling through the rest
+ * as each one ends (see selectTrack() for manually jumping to a specific track); otherwise it
+ * falls back to a generative ambient pad synthesized in real time via the Web Audio API — a
+ * slow, softly overlapping pad of detuned tones drawn from a fixed scale, so chord changes
+ * always sound consonant no matter which notes get picked, plus (for the menu) occasional high
+ * "sparkle" notes for a little sense of magic.
  *
  * Kept fully independent of SoundManager (its own AudioContext and gain node) so the music
  * and sound-effects mute toggles never affect each other.
  */
-export type MusicTheme = "menu" | "game";
+import { TRACKS, type Track } from "./tracks";
 
-/** Drop an mp3 at these paths (relative to public/) to replace the generative music with it. */
-const CUSTOM_TRACKS: Record<MusicTheme, string> = {
-  menu: "/ChessOnline/audio/menu-music.mp3",
-  game: "/ChessOnline/audio/game-music.mp3",
-};
+export type MusicTheme = "menu" | "game";
 
 const MUTE_KEY = "chessonline-music-muted-v1";
 
@@ -53,6 +51,10 @@ export class MusicManager {
   private sparkleTimer: number | null = null;
   private generation = 0; // bumped on stop()/theme change so stale timeouts no-op
   private fileEl: HTMLAudioElement | null = null;
+  /** Which track of each theme's playlist is current — randomized the first time a theme plays,
+   * then advances by one (wrapping) each time a track ends, or jumps directly on selectTrack(). */
+  private trackIndex: Record<MusicTheme, number> = { menu: 0, game: 0 };
+  private trackIndexInitialized: Record<MusicTheme, boolean> = { menu: false, game: false };
   /**
    * iOS Safari ties audio permission to the AudioContext's CREATION, not just resume() —
    * a context built asynchronously (e.g. from a network response, off the gesture's call
@@ -120,8 +122,41 @@ export class MusicManager {
     this.stopFile();
     this.theme = theme;
     this.generation++;
+    if (!this.trackIndexInitialized[theme]) {
+      const list = TRACKS[theme];
+      this.trackIndex[theme] = list.length ? Math.floor(Math.random() * list.length) : 0;
+      this.trackIndexInitialized[theme] = true;
+    }
     if (!this.unlocked) return; // unlock() will start this theme once a real gesture arrives
     this.tryPlayFile(theme, this.generation);
+  }
+
+  /**
+   * Jumps straight to a specific track in a theme's playlist (the in-game track picker calls
+   * this) — once that track ends, the normal auto-advance just continues cycling the list from
+   * there, wrapping back to the start.
+   */
+  selectTrack(theme: MusicTheme, trackId: string) {
+    const idx = TRACKS[theme].findIndex((t) => t.id === trackId);
+    if (idx === -1) return;
+    this.trackIndex[theme] = idx;
+    this.trackIndexInitialized[theme] = true;
+    if (this.theme === theme && this.unlocked) {
+      this.generation++;
+      this.stopVoices();
+      this.tryPlayFile(theme, this.generation);
+    }
+  }
+
+  getTracks(theme: MusicTheme): Track[] {
+    return TRACKS[theme];
+  }
+
+  getCurrentTrackId(theme: MusicTheme): string | null {
+    const list = TRACKS[theme];
+    if (!list.length) return null;
+    const idx = this.trackIndexInitialized[theme] ? this.trackIndex[theme] : 0;
+    return list[idx]?.id ?? null;
   }
 
   stop() {
@@ -147,10 +182,22 @@ export class MusicManager {
     }
   }
 
-  /** Tries to play a real audio file for this theme; falls back to the generative pad if none exists. */
+  /**
+   * Tries to play the theme's current playlist track; falls back to the generative pad if none
+   * exists. Doesn't loop the single file — instead advances to the next track in the playlist
+   * (wrapping back to the start) once this one ends, so a real playlist actually cycles through
+   * every track rather than repeating the same one forever.
+   */
   private tryPlayFile(theme: MusicTheme, generation: number) {
-    const audio = new Audio(CUSTOM_TRACKS[theme]);
-    audio.loop = true;
+    const list = TRACKS[theme];
+    if (!list.length) {
+      this.ensureContext();
+      this.scheduleChord(theme, generation);
+      this.scheduleSparkle(theme, generation);
+      return;
+    }
+    const track = list[this.trackIndex[theme]];
+    const audio = new Audio(track.src);
     audio.volume = this.muted ? 0 : this.volume;
     this.fileEl = audio;
     let fallenBack = false;
@@ -163,6 +210,11 @@ export class MusicManager {
       this.scheduleSparkle(theme, generation);
     };
     audio.addEventListener("error", fallbackToGenerative);
+    audio.addEventListener("ended", () => {
+      if (generation !== this.generation) return; // superseded by a theme switch or manual track pick
+      this.trackIndex[theme] = (this.trackIndex[theme] + 1) % list.length;
+      this.tryPlayFile(theme, generation);
+    });
     // autoplay may be blocked until unlock() runs from a user gesture — that's not a
     // missing-file case, so it must never trigger the generative fallback.
     audio.play().catch(() => {});

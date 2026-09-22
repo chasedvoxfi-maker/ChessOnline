@@ -15,7 +15,6 @@ interface ActiveAnim {
   duration: number;
   elapsed: number;
   spin?: number;
-  fadeOut?: boolean;
   fromScale?: number;
   toScale?: number;
   onComplete?: () => void;
@@ -60,9 +59,9 @@ export class Board3D {
   private legalMarkers: THREE.Mesh[] = [];
   private lastMoveMarkers: THREE.Mesh[] = [];
 
-  // Camera/skin mode — "angle" is the plain player eye-view, "table" and "topdown" both show
-  // the wooden tabletop (captured pieces rest directly on it), just from a shallower or a
-  // near-vertical angle.
+  // Camera angle — "angle" is a shallower player eye-view, "table" and "topdown" are
+  // progressively more overhead. The wooden tabletop (captured pieces rest directly on it) is
+  // always visible; only the camera's elevation changes between modes.
   private tableDecor: TableDecor;
   private viewMode: ViewMode = "angle";
   private capturedGroup = new THREE.Group();
@@ -114,7 +113,6 @@ export class Board3D {
     this.scene.add(this.confetti.group);
 
     this.tableDecor = buildTableDecor(theme.table);
-    this.tableDecor.group.visible = false;
     this.scene.add(this.tableDecor.group);
     this.scene.add(this.capturedGroup);
 
@@ -346,14 +344,14 @@ export class Board3D {
   }
 
   /**
-   * Switches camera/skin mode: "angle" is the plain player eye-view (no table), "table" is the
-   * raised wooden-table skin at a shallow overhead angle, "topdown" is the same table skin but
-   * dead overhead so the board reads as one large square.
+   * Switches camera angle: "angle" is a shallower player eye-view, "table" a bit more overhead,
+   * "topdown" dead overhead so the board reads as one large square. The wooden tabletop itself
+   * stays visible in every mode — it used to disappear behind a flat background in "angle",
+   * which just read as a bug.
    */
   setViewMode(mode: ViewMode) {
     if (this.viewMode === mode) return;
     this.viewMode = mode;
-    this.tableDecor.group.visible = mode !== "angle";
     this.handleResize();
   }
 
@@ -556,39 +554,21 @@ export class Board3D {
     const from = mesh.position.clone();
     const color = (mesh.userData as { color: PieceColor }).color;
 
-    if (this.viewMode !== "angle") {
-      const to = this.nextRestSlot(color);
-      this.anims.push({
-        mesh,
-        from,
-        to,
-        arcHeight: 1.0,
-        duration: 0.55,
-        spin: (Math.random() - 0.5) * 4,
-        fromScale: 0.95,
-        toScale: 0.55,
-        elapsed: 0,
-        onComplete: () => {
-          this.capturedGroup.add(mesh); // reparents; three.js detaches it from the scene root first
-          onComplete?.();
-        },
-      });
-      return;
-    }
-
-    const isWhite = color === "w";
-    const to = from.clone().add(new THREE.Vector3(isWhite ? 3.2 : -3.2, -0.3, (Math.random() - 0.5) * 2));
+    // The tabletop is visible in every camera mode now, so captures always fly to a rest slot
+    // on it rather than off the edge of the board.
+    const to = this.nextRestSlot(color);
     this.anims.push({
       mesh,
       from,
       to,
-      arcHeight: 1.1,
-      duration: 0.5,
-      spin: (Math.random() - 0.5) * 10,
-      fadeOut: true,
+      arcHeight: 1.0,
+      duration: 0.55,
+      spin: (Math.random() - 0.5) * 4,
+      fromScale: 0.95,
+      toScale: 0.55,
       elapsed: 0,
       onComplete: () => {
-        this.scene.remove(mesh);
+        this.capturedGroup.add(mesh); // reparents; three.js detaches it from the scene root first
         onComplete?.();
       },
     });
@@ -632,15 +612,6 @@ export class Board3D {
       if (a.spin) a.mesh.rotation.y += a.spin * dt;
       if (a.fromScale !== undefined && a.toScale !== undefined) {
         a.mesh.scale.setScalar(a.fromScale + (a.toScale - a.fromScale) * e);
-      }
-      if (a.fadeOut) {
-        a.mesh.traverse((obj) => {
-          if (obj instanceof THREE.Mesh) {
-            const mat = obj.material as THREE.MeshPhysicalMaterial;
-            mat.transparent = true;
-            mat.opacity = 1 - t;
-          }
-        });
       }
       if (t >= 1) {
         this.anims.splice(i, 1);

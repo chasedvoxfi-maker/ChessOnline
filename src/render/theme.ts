@@ -111,9 +111,13 @@ export const PIECE_PRESETS: Record<
     reflectivity: number;
   }
 > = {
-  "walnut-light": { color: 0x5a4028, gradientTop: 0x8f6a41, outline: 0x33240f, roughness: 0.6, clearcoat: 0.18, clearcoatRoughness: 0.45, reflectivity: 0.25 },
-  "walnut-dark": { color: 0x3c2a1a, gradientTop: 0x76512f, outline: 0x241a10, roughness: 0.6, clearcoat: 0.18, clearcoatRoughness: 0.45, reflectivity: 0.25 },
-  "classic-black": { color: 0x2a2018, gradientTop: 0x5a4632, outline: 0x413c48, roughness: 0.28, clearcoat: 0.6, clearcoatRoughness: 0.2, reflectivity: 0.5 },
+  // A real varnish coat: the base wood layer keeps a wood-like roughness (it's still matte
+  // underneath, not metal or plastic), but a strong, tight clearcoat on top throws a proper
+  // lacquered highlight — the same reason a polished wooden chess set gleams under light while
+  // unfinished wood doesn't.
+  "walnut-light": { color: 0x5a4028, gradientTop: 0x8f6a41, outline: 0x33240f, roughness: 0.5, clearcoat: 0.6, clearcoatRoughness: 0.12, reflectivity: 0.45 },
+  "walnut-dark": { color: 0x3c2a1a, gradientTop: 0x76512f, outline: 0x241a10, roughness: 0.5, clearcoat: 0.6, clearcoatRoughness: 0.12, reflectivity: 0.45 },
+  "classic-black": { color: 0x2a2018, gradientTop: 0x5a4632, outline: 0x413c48, roughness: 0.28, clearcoat: 0.65, clearcoatRoughness: 0.15, reflectivity: 0.5 },
 };
 
 export const PIECE_OPTIONS: { id: PieceThemeId; name: string; desc: string }[] = [
