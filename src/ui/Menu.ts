@@ -12,11 +12,13 @@ import {
   BOARD_OPTIONS,
   BOARD_TEXTURE_PATH,
   PIECE_OPTIONS,
-  PIECE_PRESETS,
+  PIECE_COLOR_PRESETS,
+  PIECE_FINISH_OPTIONS,
   type AppTheme,
   type TableThemeId,
   type BoardThemeId,
-  type PieceThemeId,
+  type PieceColorId,
+  type PieceFinishId,
 } from "../render/theme";
 
 export interface MenuCallbacks {
@@ -240,7 +242,14 @@ export class Menu {
         <div class="settings-group">
           <h3 class="settings-group-title">Фигуры</h3>
           <div class="settings-options">
-            ${PIECE_OPTIONS.map((o) => this.settingsOptionHtml("pieces", o.id, o.name, o.desc, this.pieceSwatchStyle(o.id))).join("")}
+            ${PIECE_OPTIONS.map((o) => this.settingsOptionHtml("pieceColor", o.id, o.name, o.desc, this.pieceSwatchStyle(o.id, this.theme.pieceFinish))).join("")}
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3 class="settings-group-title">Отделка фигур</h3>
+          <div class="settings-options">
+            ${PIECE_FINISH_OPTIONS.map((o) => this.settingsOptionHtml("pieceFinish", o.id, o.name, o.desc, this.pieceSwatchStyle(this.theme.pieceColor, o.id))).join("")}
           </div>
         </div>
 
@@ -252,18 +261,19 @@ export class Menu {
     this.contentEl.querySelectorAll<HTMLButtonElement>(".settings-option").forEach((btn) => {
       btn.addEventListener("click", () => {
         soundManager.playSelect();
-        const kind = btn.dataset.kind as "table" | "board" | "pieces";
+        const kind = btn.dataset.kind as "table" | "board" | "pieceColor" | "pieceFinish";
         const id = btn.dataset.id!;
         if (kind === "table") this.theme.table = id as TableThemeId;
         else if (kind === "board") this.theme.board = id as BoardThemeId;
-        else this.theme.pieces = id as PieceThemeId;
+        else if (kind === "pieceColor") this.theme.pieceColor = id as PieceColorId;
+        else this.theme.pieceFinish = id as PieceFinishId;
         saveTheme(this.theme);
         this.renderSettingsPanel();
       });
     });
   }
 
-  private settingsOptionHtml(kind: "table" | "board" | "pieces", id: string, name: string, desc: string, swatchStyle: string): string {
+  private settingsOptionHtml(kind: "table" | "board" | "pieceColor" | "pieceFinish", id: string, name: string, desc: string, swatchStyle: string): string {
     const active = this.theme[kind] === id;
     return `
       <button class="settings-option ${active ? "active" : ""}" data-kind="${kind}" data-id="${id}">
@@ -282,11 +292,19 @@ export class Menu {
     return `background-image:url(${BOARD_TEXTURE_PATH[id]});background-size:cover;`;
   }
 
-  private pieceSwatchStyle(id: PieceThemeId): string {
-    const preset = PIECE_PRESETS[id];
-    const base = `#${preset.color.toString(16).padStart(6, "0")}`;
-    const top = `#${preset.gradientTop.toString(16).padStart(6, "0")}`;
-    return `background:radial-gradient(circle at 35% 30%, ${top}, ${base} 75%);`;
+  /** Renders a color+finish combination — used for both the color group (varying color, current
+   * finish) and the finish group (current color, varying finish) so each preview reflects the
+   * actual combination that choice would produce. */
+  private pieceSwatchStyle(colorId: PieceColorId, finishId: PieceFinishId): string {
+    const color = PIECE_COLOR_PRESETS[colorId];
+    const base = `#${color.color.toString(16).padStart(6, "0")}`;
+    const top = `#${color.gradientTop.toString(16).padStart(6, "0")}`;
+    if (finishId === "glossy") {
+      // a tight, bright highlight for a lacquered look
+      return `background:radial-gradient(circle at 32% 26%, #ffffff, ${top} 20%, ${base} 65%);`;
+    }
+    // a soft, muted highlight for a matte look — no sharp specular dot
+    return `background:radial-gradient(circle at 35% 32%, ${top}, ${base} 80%);`;
   }
 
   private renderModeSelect() {

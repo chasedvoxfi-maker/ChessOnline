@@ -86,7 +86,7 @@ export class Board3D {
     // The look-and-feel picked on the Settings screen (main menu) — read fresh at construction
     // time, so a new game always starts with whatever was last saved there.
     const theme = opts?.theme ?? loadTheme();
-    this.materials = createMaterials(theme.pieces);
+    this.materials = createMaterials(theme.pieceColor, theme.pieceFinish);
     this.pieceFactories = opts?.pieceFactories ?? PIECE_FACTORIES;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
