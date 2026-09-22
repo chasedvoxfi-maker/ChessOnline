@@ -446,6 +446,164 @@ button {
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8);
 }
 
+/* The game picker's compact entry point: sits in the art's own negative space (the gap between
+   the mountains and the castle) rather than the big always-open panel stack that used to cover
+   most of the screen. One small trigger; the game list — and, when a save exists, the
+   continue/new-game confirmation — only appears once tapped. */
+.game-launcher {
+  position: absolute;
+  z-index: 4;
+  top: calc(24vh + env(safe-area-inset-top));
+  right: calc(1.4rem + env(safe-area-inset-right));
+}
+@media (min-width: 700px) {
+  .game-launcher {
+    top: calc(15vh + env(safe-area-inset-top));
+    right: calc(3.2rem + env(safe-area-inset-right));
+  }
+}
+
+.launcher-trigger {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 1.1rem 0.5rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 175, 106, 0.4);
+  background: rgba(8, 6, 12, 0.82);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5), 0 0 16px rgba(212, 175, 106, 0.08);
+  color: var(--gold-bright);
+  font-family: "Cinzel", serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.22s ease, background 0.22s ease;
+}
+.launcher-trigger .menu-icon-badge {
+  width: 1.9rem;
+  height: 1.9rem;
+}
+@media (hover: hover) {
+  .launcher-trigger:hover {
+    transform: scale(1.04);
+    border-color: var(--gold-bright);
+    background: rgba(26, 20, 34, 0.88);
+  }
+}
+.launcher-trigger:active {
+  transform: scale(0.96);
+}
+
+.launcher-dropdown {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  z-index: 5;
+  width: 250px;
+  max-width: 76vw;
+  padding: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  background: rgba(15, 11, 20, 0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--panel-border);
+  border-radius: 20px 26px 18px 24px / 24px 18px 26px 20px;
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6);
+  animation: launcher-in 0.16s ease-out;
+}
+.launcher-dropdown.hidden {
+  display: none;
+}
+@keyframes launcher-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.launcher-item {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 14px;
+  border: none;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+  font-family: "Manrope", sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+}
+.launcher-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.launcher-item .menu-icon-badge {
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 1rem;
+}
+.launcher-item small {
+  display: block;
+  color: var(--gold);
+  font-weight: 500;
+  font-size: 0.68rem;
+  margin-top: 0.1rem;
+}
+
+.launcher-join {
+  color: var(--gold);
+  justify-content: center;
+  font-family: "Cinzel", serif;
+}
+
+.launcher-back {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  padding: 0.2rem 0.4rem;
+}
+.launcher-back:hover {
+  color: var(--gold-bright);
+}
+
+.launcher-confirm-title {
+  margin: 0.2rem 0.4rem 0;
+  font-family: "Cinzel", serif;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--gold-bright);
+}
+.launcher-confirm-desc {
+  margin: 0 0.4rem 0.3rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.launcher-confirm-yes {
+  border: 1px solid rgba(212, 175, 106, 0.4);
+  background: rgba(38, 30, 18, 0.82);
+  color: var(--gold-bright);
+  justify-content: center;
+}
+.launcher-confirm-no {
+  justify-content: center;
+  color: var(--text-dim);
+}
+
 .section-title {
   font-family: "Cinzel", serif;
   font-size: 1.2rem;

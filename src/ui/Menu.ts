@@ -82,6 +82,7 @@ function iconBadge(glyphOrSvgKey: string): string {
 export class Menu {
   el: HTMLDivElement;
   private contentEl: HTMLDivElement;
+  private launcherEl: HTMLDivElement;
   private cancelledOnlineWait = false;
   private callbacks: MenuCallbacks;
   private continueInfo: Partial<Record<GameKind, ContinueInfo>>;
@@ -103,10 +104,19 @@ export class Menu {
         <button class="audio-toggle-btn" data-action="toggle-sound" title="Звуки"></button>
         <button class="audio-toggle-btn" data-action="open-settings" title="Настройки">${SVG_ICONS.gear}</button>
       </div>
+      <div class="game-launcher hidden">
+        <button class="launcher-trigger" data-action="toggle-launcher">
+          ${iconBadge("play")}
+          <span>Играть</span>
+        </button>
+        <div class="launcher-dropdown hidden"></div>
+      </div>
       <div class="menu-content"></div>
       <div class="app-version">v${APP_VERSION}</div>
     `;
     this.contentEl = this.el.querySelector(".menu-content")!;
+    this.launcherEl = this.el.querySelector(".game-launcher")!;
+    this.wireLauncher();
     this.renderGamePicker();
     this.wireAudioControls();
     this.el.querySelector('[data-action="open-settings"]')!.addEventListener("click", () => {
@@ -152,74 +162,123 @@ export class Menu {
     musicManager.unlock();
   }
 
+  /** Wires the launcher's own toggle + outside-click/Escape-to-close handling once, for the
+   * lifetime of this Menu instance — renderGamePicker() only ever refills .launcher-dropdown's
+   * content, so these don't need re-wiring on every re-render. */
+  private wireLauncher() {
+    const trigger = this.launcherEl.querySelector<HTMLButtonElement>(".launcher-trigger")!;
+    this.wireEffects(this.launcherEl);
+    trigger.addEventListener("click", () => {
+      this.unlockAudio();
+      soundManager.playSelect();
+      const dropdown = this.launcherEl.querySelector<HTMLDivElement>(".launcher-dropdown")!;
+      const opening = dropdown.classList.contains("hidden");
+      dropdown.classList.toggle("hidden");
+      if (opening) this.renderLauncherList();
+    });
+    document.addEventListener("click", (e) => {
+      const dropdown = this.launcherEl.querySelector<HTMLDivElement>(".launcher-dropdown");
+      // composedPath() reflects the click's target chain as it was at dispatch time — unlike
+      // launcherEl.contains(e.target), it stays correct even when a click handler on the target
+      // (e.g. picking a game) replaces the dropdown's innerHTML and detaches the clicked node
+      // before this bubbling listener runs.
+      if (dropdown && !dropdown.classList.contains("hidden") && !e.composedPath().includes(this.launcherEl)) {
+        dropdown.classList.add("hidden");
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") this.launcherEl.querySelector(".launcher-dropdown")?.classList.add("hidden");
+    });
+  }
+
+  private closeLauncher() {
+    this.launcherEl.querySelector(".launcher-dropdown")?.classList.add("hidden");
+  }
+
+  /** The launcher trigger only makes sense on the game-picker's own root screen — every other
+   * screen (mode select, settings, online lobby, ...) is itself already a deliberate drill-down,
+   * so the compact "Играть" button hides while one of those is showing. */
+  private showLauncher(show: boolean) {
+    this.launcherEl.classList.toggle("hidden", !show);
+    if (!show) this.closeLauncher();
+  }
+
   private renderGamePicker() {
-    const continuePanels = GAME_LABELS.filter((g) => this.continueInfo[g.value]).map(
-      (g) => `
-      <div class="menu-panel continue-panel">
-        <button class="menu-btn continue-btn" data-continue="${g.value}">
-          ${iconBadge("play")}
-          <span>
-            Продолжить: ${GAME_TITLES[g.value]}
-            <span class="desc">${this.continueInfo[g.value]!.label}</span>
-          </span>
-        </button>
-        <button class="back-btn" data-discard="${g.value}">Начать новую игру, удалив сохранённую</button>
-      </div>`,
-    );
+    this.contentEl.innerHTML = "";
+    this.showLauncher(true);
+  }
 
-    this.contentEl.innerHTML = `
-      ${continuePanels.join("")}
-      <div class="menu-panel">
-        ${GAME_LABELS.map(
-          (g) => `
-          <button class="menu-btn" data-game="${g.value}">
-            ${iconBadge(g.icon)}
-            <span>
-              ${g.label}
-              <span class="desc">${g.desc}</span>
-            </span>
-          </button>`,
-        ).join("")}
-      </div>
-      <button class="back-btn join-link" data-action="join-anywhere">Есть код от друга? Присоединиться</button>
+  /** The dropdown's default state: one compact row per game (flagging which have a save to
+   * resume), plus the online-join link. */
+  private renderLauncherList() {
+    const dropdown = this.launcherEl.querySelector<HTMLDivElement>(".launcher-dropdown")!;
+    dropdown.innerHTML = `
+      ${GAME_LABELS.map(
+        (g) => `
+        <button class="launcher-item" data-game="${g.value}">
+          ${iconBadge(g.icon)}
+          <span>${g.label}${this.continueInfo[g.value] ? "<small>есть сохранённая игра</small>" : ""}</span>
+        </button>`,
+      ).join("")}
+      <button class="launcher-item launcher-join" data-action="join-anywhere">Есть код? Присоединиться</button>
     `;
-    this.wireEffects();
-
-    this.contentEl.querySelectorAll<HTMLButtonElement>("[data-continue]").forEach((btn) => {
+    this.wireEffects(dropdown);
+    dropdown.querySelectorAll<HTMLButtonElement>("[data-game]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        this.unlockAudio();
         soundManager.playSelect();
-        this.callbacks.onContinue(btn.dataset.continue as GameKind);
+        const game = btn.dataset.game as GameKind;
+        if (this.continueInfo[game]) this.renderLauncherConfirm(game);
+        else this.startFreshGame(game);
       });
     });
-    this.contentEl.querySelectorAll<HTMLButtonElement>("[data-discard]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const game = btn.dataset.discard as GameKind;
-        delete this.continueInfo[game];
-        this.callbacks.onDiscardSave(game);
-        this.renderGamePicker();
-      });
-    });
-    this.contentEl.querySelectorAll<HTMLButtonElement>("[data-game]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        this.unlockAudio();
-        soundManager.playSelect();
-        this.selectedGame = btn.dataset.game as GameKind;
-        this.selectedFormation = "rectangle";
-        this.renderModeSelect();
-      });
-    });
-    this.contentEl.querySelector('[data-action="join-anywhere"]')!.addEventListener("click", () => {
+    dropdown.querySelector('[data-action="join-anywhere"]')!.addEventListener("click", () => {
       this.unlockAudio();
       soundManager.playSelect();
       this.renderJoinPanel();
     });
   }
 
+  /** A small "continue or start over" confirmation, swapped into the same dropdown — the extra
+   * step only appears for a game that actually has a save, instead of a panel shown up front for
+   * every game regardless of whether there's anything to continue. */
+  private renderLauncherConfirm(game: GameKind) {
+    const dropdown = this.launcherEl.querySelector<HTMLDivElement>(".launcher-dropdown")!;
+    const info = this.continueInfo[game]!;
+    dropdown.innerHTML = `
+      <button class="launcher-back" data-action="back">← Назад</button>
+      <p class="launcher-confirm-title">Продолжить «${GAME_TITLES[game]}»?</p>
+      <p class="launcher-confirm-desc">${info.label}</p>
+      <button class="launcher-item launcher-confirm-yes" data-action="continue">Да, продолжить</button>
+      <button class="launcher-item launcher-confirm-no" data-action="new">Нет, начать заново</button>
+    `;
+    this.wireEffects(dropdown);
+    dropdown.querySelector('[data-action="back"]')!.addEventListener("click", () => this.renderLauncherList());
+    dropdown.querySelector('[data-action="continue"]')!.addEventListener("click", () => {
+      this.unlockAudio();
+      soundManager.playSelect();
+      this.callbacks.onContinue(game);
+    });
+    dropdown.querySelector('[data-action="new"]')!.addEventListener("click", () => {
+      soundManager.playSelect();
+      delete this.continueInfo[game];
+      this.callbacks.onDiscardSave(game);
+      this.startFreshGame(game);
+    });
+  }
+
+  private startFreshGame(game: GameKind) {
+    this.unlockAudio();
+    this.closeLauncher();
+    this.selectedGame = game;
+    this.selectedFormation = "rectangle";
+    this.renderModeSelect();
+  }
+
   /** Picks the look of the table, board and pieces for every future game — every option here is
    * a variant that actually shipped at some point (see render/theme.ts). Applies from the next
    * game started; there's no game running to update live while this screen is open. */
   private renderSettingsPanel() {
+    this.showLauncher(false);
     this.contentEl.innerHTML = `
       <div class="menu-panel settings-panel">
         <button class="back-btn">← Назад</button>
@@ -307,6 +366,7 @@ export class Menu {
   }
 
   private renderModeSelect() {
+    this.showLauncher(false);
     const game = this.selectedGame;
     this.contentEl.innerHTML = `
       <div class="menu-panel">
@@ -372,6 +432,7 @@ export class Menu {
   }
 
   private renderAiPanel() {
+    this.showLauncher(false);
     const game = this.selectedGame;
     this.contentEl.innerHTML = `
       <div class="menu-panel">
@@ -404,6 +465,7 @@ export class Menu {
 
   /** Hosting always happens from within a chosen game's panel — the host picks the game up front. */
   private renderHostPanel() {
+    this.showLauncher(false);
     this.cancelledOnlineWait = false;
     const game = this.selectedGame;
     this.contentEl.innerHTML = `
@@ -450,6 +512,7 @@ export class Menu {
 
   /** Joining doesn't require picking a game first — the host's room announces it once connected. */
   private renderJoinPanel() {
+    this.showLauncher(false);
     this.cancelledOnlineWait = false;
     this.contentEl.innerHTML = `
       <div class="menu-panel">
@@ -521,8 +584,8 @@ export class Menu {
    * scale/glow hover already handled in CSS. Safe to call repeatedly — it only ever adds
    * listeners to buttons currently in the (freshly replaced) DOM.
    */
-  private wireEffects() {
-    this.contentEl.querySelectorAll<HTMLButtonElement>(".menu-btn, .pill-btn, .primary-btn").forEach((btn) => {
+  private wireEffects(root: HTMLElement = this.contentEl) {
+    root.querySelectorAll<HTMLButtonElement>(".menu-btn, .pill-btn, .primary-btn, .launcher-trigger, .launcher-item").forEach((btn) => {
       btn.addEventListener("pointerdown", (e) => {
         if (btn.disabled) return;
         const rect = btn.getBoundingClientRect();
