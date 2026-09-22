@@ -4,7 +4,7 @@
  * thrown away when the "current" look moved on.
  */
 
-export type TableThemeId = "light" | "dark";
+export type TableThemeId = "light" | "dark" | "pine";
 export type BoardThemeId = "light" | "dark";
 export type PieceColorId = "walnut-light" | "walnut-dark" | "classic-black";
 export type PieceFinishId = "glossy" | "matte";
@@ -29,7 +29,7 @@ export function loadTheme(): AppTheme {
       const parsed = JSON.parse(raw) as Partial<AppTheme> & { pieces?: PieceColorId };
       const pieceColor = parsed.pieceColor ?? parsed.pieces;
       return {
-        table: parsed.table === "dark" ? "dark" : DEFAULT_THEME.table,
+        table: parsed.table === "dark" || parsed.table === "pine" ? parsed.table : DEFAULT_THEME.table,
         board: parsed.board === "dark" ? "dark" : DEFAULT_THEME.board,
         pieceColor:
           pieceColor === "walnut-dark" || pieceColor === "classic-black" || pieceColor === "walnut-light"
@@ -57,11 +57,13 @@ export function saveTheme(theme: AppTheme) {
 export const TABLE_TEXTURE_PATH: Record<TableThemeId, string> = {
   light: "/ChessOnline/textures/table-photo.webp",
   dark: "/ChessOnline/textures/table-photo-dark.webp",
+  pine: "/ChessOnline/textures/table-photo-pine.webp",
 };
 
 export const TABLE_OPTIONS: { id: TableThemeId; name: string; desc: string }[] = [
   { id: "light", name: "Светлый дуб", desc: "тёплые светлые доски стола" },
   { id: "dark", name: "Тёмный орех", desc: "тёмные доски стола" },
+  { id: "pine", name: "Сосна", desc: "светлые доски сосны с сучками" },
 ];
 
 /** Board photo textures — the "light" one is the current, warmth-lifted version; "dark" is the
