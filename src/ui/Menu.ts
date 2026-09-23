@@ -122,7 +122,10 @@ export class Menu {
     this.wireAudioControls();
     this.el.querySelector('[data-action="open-settings"]')!.addEventListener("click", () => {
       soundManager.playSelect();
-      this.renderSettingsPanel();
+      // Pressing the gear again while settings is already open closes it back to the game
+      // picker, the same as the panel's own "← Назад" button.
+      if (this.contentEl.querySelector(".settings-panel")) this.renderGamePicker();
+      else this.renderSettingsPanel();
     });
     musicManager.play("menu");
 

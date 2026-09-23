@@ -10,6 +10,7 @@ import { RotateGate, tryLockLandscape } from "./ui/RotateGate";
 import { soundManager } from "./audio/SoundManager";
 import { musicManager } from "./audio/MusicManager";
 import { trackLibraryReady } from "./audio/trackLibrary";
+import { maybeShowAddToHomeScreenHint } from "./ui/AddToHomeScreen";
 import { loadSavedGame, clearSavedGame, type SavedGameState, type GameKind } from "./game/SaveGame";
 import type { CornersFormation } from "./corners/CornersGame";
 import type { Difficulty, GameMode } from "./game/types";
@@ -274,3 +275,4 @@ function startCornersGame(boardContainer: HTMLElement, screen: HTMLElement, opts
 }
 
 showMenu();
+maybeShowAddToHomeScreenHint();

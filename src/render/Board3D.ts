@@ -3,7 +3,7 @@ import { buildBoard } from "./board";
 import { createMaterials, PIECE_FACTORIES, addOutline, type PieceMaterials, type PieceFactory } from "./pieceModels";
 import { squareToWorld, worldToSquare } from "./coords";
 import { createSelectMarker, createLegalDot, createLastMoveMarker, CheckGlow, ConfettiSystem } from "./effects";
-import { buildTableDecor, type TableDecor } from "./tableDecor";
+import { buildTableDecor, REST_CENTER_X, type TableDecor } from "./tableDecor";
 import { loadTheme, type AppTheme } from "./theme";
 import type { PieceColor } from "../game/types";
 
@@ -194,12 +194,17 @@ export class Board3D {
    * own corners edge-to-edge (the actual "whole board must fit" requirement), plus modest
    * headroom for a corner piece's height and for a tall center-file piece (king/queen) at the
    * back rank — generous enough to cover chess, checkers and Corners' rectangle formation
-   * (which fills every square in each corner, right up to the board edge).
+   * (which fills every square in each corner, right up to the board edge). Also the near edge of
+   * each side's captured-piece rest area (REST_CENTER_X), so at least the first capture of each
+   * color is always on screen rather than getting cropped on narrow phones — deliberately not the
+   * tray's full multi-piece width, since fitting that would force the board itself noticeably
+   * smaller; a stack beyond the first piece or two can still run off the edge.
    */
   private static readonly FRAMING_POINTS: [number, number, number][] = [
     [-4, 0, -4], [4, 0, -4], [-4, 0, 4], [4, 0, 4],
     [-4, 0.5, -4], [4, 0.5, -4], [-4, 0.5, 4], [4, 0.5, 4],
     [-0.5, 1.3, -4], [0.5, 1.3, -4], [-0.5, 1.3, 4], [0.5, 1.3, 4],
+    [-REST_CENTER_X, 0.5, 0], [REST_CENTER_X, 0.5, 0],
   ];
 
   /**

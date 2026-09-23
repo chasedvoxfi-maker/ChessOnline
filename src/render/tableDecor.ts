@@ -7,7 +7,10 @@ const BOARD_OUTER_HALF = 4.4;
 const REST_GAP = 0.5;
 /** How far out (world X) captured pieces rest, just clear of the board's frame — there's no
  * separate tray box any more, they simply stand on the tabletop itself. */
-const REST_CENTER_X = BOARD_OUTER_HALF + REST_GAP;
+/** World X where the nearest captured-piece rest slot sits, just clear of the board's frame —
+ * exported so the FOV framing solver (Board3D.FRAMING_POINTS) can guarantee it stays on screen
+ * even on narrow phones, instead of only the board itself. */
+export const REST_CENTER_X = BOARD_OUTER_HALF + REST_GAP;
 const TABLE_Y = -0.64;
 
 export interface TableDecor {
