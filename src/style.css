@@ -556,7 +556,7 @@ button {
   /* dvh (not vh) so this tracks the actually-visible viewport — vh is pinned to the browser's
      largest possible viewport (chrome hidden), so on mobile it drifts out of sync with the art
      underneath whenever the address bar shows/hides, which is what caused the title overlap. */
-  top: calc(28dvh + env(safe-area-inset-top));
+  top: calc(34dvh + env(safe-area-inset-top));
   right: calc(1.4rem + env(safe-area-inset-right));
 }
 @media (min-width: 700px) {

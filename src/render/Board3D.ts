@@ -189,22 +189,37 @@ export class Board3D {
     if (!this.cameraOverride) this.updateCameraPosition();
   };
 
+  /** Layout of the captured-piece rest columns beside the board (also used by restSlotPosition,
+   * which is where a captured piece's actual position comes from) — pulled out as shared
+   * constants so FRAMING_POINTS below can guarantee the real outer corners of the first column
+   * stay on screen, not just a single, easy-to-get-wrong representative point. */
+  private static readonly REST_PER_COLUMN = 8;
+  private static readonly REST_SPACING_Z = 0.78;
+  private static readonly REST_SPACING_X = 0.62;
+  private static readonly REST_OUTER_X = REST_CENTER_X + Board3D.REST_SPACING_X / 2;
+  /** Furthest Z-offset (in spacingZ units, from centerOutRowOffset) any of the 8 rows in a
+   * column reaches — ±4 covers all of them symmetrically. "angle"/"table" fit this whole range
+   * comfortably; the near-overhead "topdown" camera's required FOV to cover it hits the 115° cap
+   * below regardless, so its far captures can still run past the edge either way. */
+  private static readonly REST_GUARANTEE_Z = 4 * Board3D.REST_SPACING_Z;
+
   /**
    * Points (in board-local world space) the camera must keep in frame: the 8x8 board plane's
    * own corners edge-to-edge (the actual "whole board must fit" requirement), plus modest
    * headroom for a corner piece's height and for a tall center-file piece (king/queen) at the
    * back rank — generous enough to cover chess, checkers and Corners' rectangle formation
-   * (which fills every square in each corner, right up to the board edge). Also the near edge of
-   * each side's captured-piece rest area (REST_CENTER_X), so at least the first capture of each
-   * color is always on screen rather than getting cropped on narrow phones — deliberately not the
-   * tray's full multi-piece width, since fitting that would force the board itself noticeably
-   * smaller; a stack beyond the first piece or two can still run off the edge.
+   * (which fills every square in each corner, right up to the board edge). Also the outer
+   * corners of each side's captured-piece rest column (REST_GUARANTEE_Z, not the column's full
+   * depth — see that constant), so a growing pile of captures stays on screen instead of getting
+   * cropped on narrow or notched-phone-landscape screens; a piece beyond that range can still run
+   * off the edge, more so on the near-overhead "topdown" camera than "angle"/"table".
    */
   private static readonly FRAMING_POINTS: [number, number, number][] = [
     [-4, 0, -4], [4, 0, -4], [-4, 0, 4], [4, 0, 4],
     [-4, 0.5, -4], [4, 0.5, -4], [-4, 0.5, 4], [4, 0.5, 4],
     [-0.5, 1.3, -4], [0.5, 1.3, -4], [-0.5, 1.3, 4], [0.5, 1.3, 4],
-    [-REST_CENTER_X, 0.5, 0], [REST_CENTER_X, 0.5, 0],
+    [-Board3D.REST_OUTER_X, 0.5, Board3D.REST_GUARANTEE_Z], [-Board3D.REST_OUTER_X, 0.5, -Board3D.REST_GUARANTEE_Z],
+    [Board3D.REST_OUTER_X, 0.5, Board3D.REST_GUARANTEE_Z], [Board3D.REST_OUTER_X, 0.5, -Board3D.REST_GUARANTEE_Z],
   ];
 
   /**
@@ -364,17 +379,27 @@ export class Board3D {
     return this.viewMode;
   }
 
+  /** Row 0, 1, 2, 3, … within a column maps to Z-offset 0, -1, +1, -2, +2, … (spacingZ units) —
+   * captures start right beside the board's own Z-center and alternate outward from there, so
+   * however many the FOV guarantees (REST_GUARANTEE_Z) are exactly the ones placed first, rather
+   * than the column's fixed physical extreme always being "capture #1" regardless of how many
+   * pieces have actually been taken. */
+  private static centerOutRowOffset(row: number): number {
+    const half = Math.floor(row / 2);
+    return row % 2 === 0 ? half : -(half + 1);
+  }
+
   /** Where the Nth captured piece of this color comes to rest, directly on the tabletop next to the board. */
   private restSlotPosition(color: PieceColor, index: number): THREE.Vector3 {
-    const perColumn = 8;
+    const perColumn = Board3D.REST_PER_COLUMN;
     const row = index % perColumn;
     const col = Math.floor(index / perColumn);
-    const spacingZ = 0.78;
-    const spacingX = 0.62;
-    const startZ = -((perColumn - 1) * spacingZ) / 2;
+    const spacingZ = Board3D.REST_SPACING_Z;
+    const spacingX = Board3D.REST_SPACING_X;
     const centerX = color === "w" ? this.tableDecor.rightRestX : this.tableDecor.leftRestX;
     const colOffset = (col === 0 ? -1 : 1) * (spacingX / 2);
-    return new THREE.Vector3(centerX + colOffset, this.tableDecor.restY, startZ + row * spacingZ);
+    const z = Board3D.centerOutRowOffset(row) * spacingZ;
+    return new THREE.Vector3(centerX + colOffset, this.tableDecor.restY, z);
   }
 
   private nextRestSlot(color: PieceColor): THREE.Vector3 {
