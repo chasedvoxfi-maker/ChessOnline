@@ -259,7 +259,7 @@ export class MusicManager {
    * Tries to play the theme's current playlist track; falls back to the generative pad only once
    * every track in the list has failed to load (e.g. a numbered menu-music-N.mp3 slot that has no
    * file behind it yet — see tracks.ts). A missing/broken track is skipped to the next one instead
-   * of aborting the whole playlist, so a partially-filled 10-slot menu list still plays whichever
+   * of aborting the whole playlist, so a partially-filled 20-slot list still plays whichever
    * slots are actually present. Doesn't loop the single file — instead advances to the next track
    * (wrapping back to the start) once this one ends, so a real playlist actually cycles through
    * every track rather than repeating the same one forever.

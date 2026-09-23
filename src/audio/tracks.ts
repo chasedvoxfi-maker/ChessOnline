@@ -11,14 +11,14 @@ export interface Track {
  * every time that theme is (re)entered, and reshuffles again once the order is exhausted — a
  * manual pick (see MusicManager.selectTrack) or the in-game skip button just moves the cursor
  * within that order. A slot whose file doesn't exist in public/audio/ is simply skipped
- * (MusicManager tries the next one), so both lists below can list all 10 numbered slots up
+ * (MusicManager tries the next one), so both lists below can list all 20 numbered slots up
  * front regardless of how many are actually filled in.
  *
- * To add music: drop menu-music-N.mp3 or game-music-N.mp3 (N = 1..10) into public/audio/ — no
+ * To add music: drop menu-music-N.mp3 or game-music-N.mp3 (N = 1..20) into public/audio/ — no
  * code change needed, it's picked up automatically (README has the exact naming). To add more
- * than 10 for either theme, add an extra { id, title, src } entry to the relevant list here.
+ * than 20 for either theme, add an extra { id, title, src } entry to the relevant list here.
  */
-const SLOTS_PER_THEME = 10;
+const SLOTS_PER_THEME = 20;
 
 function numberedSlots(theme: "menu" | "game", label: string): Track[] {
   return Array.from({ length: SLOTS_PER_THEME }, (_, i) => ({

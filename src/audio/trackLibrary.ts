@@ -2,10 +2,11 @@
  * Two jobs, both mutating TRACKS[theme] in place (tracks.ts) so MusicManager and every UI that
  * reads getTracks() automatically see the result with no other wiring:
  *
- * 1. Prunes the numbered menu-music-N.mp3 slots (tracks.ts pre-declares all 10) down to the
- *    ones that actually exist, via a HEAD probe — otherwise the settings screen would list
- *    empty slots as real tracks. Playback itself doesn't depend on this (MusicManager already
- *    skips a missing file to the next track), this is purely for an accurate track list in UI.
+ * 1. Prunes the numbered menu-music-N.mp3/game-music-N.mp3 slots (tracks.ts pre-declares all 20
+ *    per theme) down to the ones that actually exist, via a HEAD probe — otherwise the settings
+ *    screen would list empty slots as real tracks. Playback itself doesn't depend on this
+ *    (MusicManager already skips a missing file to the next track), this is purely for an
+ *    accurate track list in UI.
  * 2. Loads any tracks the player has uploaded from their own device, stored as Blobs in
  *    IndexedDB (the only "extra storage" a static, backend-less site has). These are local to
  *    this browser only — never synced anywhere — so addCustomTrack()'s caller should make that
@@ -115,9 +116,9 @@ export function trackLibraryReady(): Promise<void> {
         customTrackIds.add(entry.id);
         TRACKS[entry.theme].push(track);
       }
-      // The pruning above can shrink a list out from under a trackIndex that MusicManager may
-      // already have randomized against the original, unfiltered 10-slot menu list (its random
-      // start doesn't wait on this probe) — reconcile both themes so that index stays in range.
+      // The pruning above can shrink a list out from under the shuffled queue MusicManager may
+      // already have built against the original, unfiltered 20-slot list (its random start
+      // doesn't wait on this probe) — reconcile both themes so the queue matches reality.
       for (const theme of themes) musicManager.notifyTracksChanged(theme);
     })();
   }
