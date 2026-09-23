@@ -1,11 +1,13 @@
 /**
  * Background music. If real tracks are dropped in public/audio/ (see tracks.ts), they're played
- * directly, picking a random track to start each theme's playlist and cycling through the rest
- * as each one ends (see selectTrack() for manually jumping to a specific track); otherwise it
- * falls back to a generative ambient pad synthesized in real time via the Web Audio API — a
- * slow, softly overlapping pad of detuned tones drawn from a fixed scale, so chord changes
- * always sound consonant no matter which notes get picked, plus (for the menu) occasional high
- * "sparkle" notes for a little sense of magic.
+ * directly — the "menu" playlist shuffles into a fresh random order each time it's (re)entered,
+ * while "game" just plays its tracks in sequence (1, 2, 3, … looping back to the start), auto-
+ * advancing to the next one as each ends (see selectTrack() for manually jumping to a specific
+ * track, or skipNext()/skipPrev() for stepping through the current order). Falls back to a
+ * generative ambient pad synthesized in real time via the Web Audio API when no real tracks
+ * exist — a slow, softly overlapping pad of detuned tones drawn from a fixed scale, so chord
+ * changes always sound consonant no matter which notes get picked, plus (for the menu)
+ * occasional high "sparkle" notes for a little sense of magic.
  *
  * Kept fully independent of SoundManager (its own AudioContext and gain node) so the music
  * and sound-effects mute toggles never affect each other.
@@ -138,14 +140,18 @@ export class MusicManager {
     return a;
   }
 
-  /** Fresh random play order for a theme, built from its current track list. */
+  /** Fresh play order for a theme, built from its current track list — shuffled for "menu" (a
+   * bit of variety across page loads/menu visits), but straight declared order for "game" (plays
+   * game-1, game-2, … in sequence, looping back to the start — a player mid-match presumably
+   * wants a predictable running order, unlike the menu which nobody sits through for long). */
   private reshuffle(theme: MusicTheme) {
-    this.queue[theme] = this.shuffle(TRACKS[theme]);
+    this.queue[theme] = theme === "menu" ? this.shuffle(TRACKS[theme]) : TRACKS[theme].slice();
     this.queuePos[theme] = 0;
   }
 
-  /** Moves to the next track in the shuffled order, reshuffling once the order is exhausted so
-   * the next lap isn't the same running order repeated. */
+  /** Moves to the next track, wrapping/reshuffling once the order is exhausted — for "menu" that
+   * means a fresh shuffle so the next lap isn't the same running order repeated; for "game" it's
+   * simply back to the top of the same sequential list. */
   private advance(theme: MusicTheme) {
     this.queuePos[theme]++;
     if (this.queuePos[theme] >= this.queue[theme].length) this.reshuffle(theme);

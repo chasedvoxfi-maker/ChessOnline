@@ -46,6 +46,10 @@ export class Board3D {
   private container: HTMLElement;
   private materials: PieceMaterials;
   private pieceFactories: Record<string, PieceFactory>;
+  /** Instance framing points and "angle" view preset — see the constructor's pieceHeightAllowance
+   * and anglePreset options, and the FRAMING_POINTS comment, for why these vary per game type. */
+  private framingPoints: [number, number, number][];
+  private viewPresets: Record<ViewMode, { elevationDeg: number; elevationFloorDeg: number; distance: number; lookZ: number }>;
   private pieceMeshes = new Map<string, THREE.Group>();
   private highlightLayer: THREE.Group;
   private raycastPlane: THREE.Mesh;
@@ -81,13 +85,35 @@ export class Board3D {
   interactionEnabled = true;
   onSquareClick: ((square: string) => void) | null = null;
 
-  constructor(container: HTMLElement, opts?: { pieceFactories?: Record<string, PieceFactory>; theme?: AppTheme }) {
+  constructor(
+    container: HTMLElement,
+    opts?: {
+      pieceFactories?: Record<string, PieceFactory>;
+      theme?: AppTheme;
+      /** How tall a piece can get at the back rank (world Y) — the "angle"/"table" cameras
+       * reserve exactly this much headroom. Chess needs room for a king/queen; checkers' flat
+       * discs don't, so a lower value lets those cameras sit noticeably closer/steeper. */
+      pieceHeightAllowance?: number;
+      /** Overrides the "angle" (default) view's elevation, both at its normal steepest (tall
+       * screens) and eased-down floor (wide screens) — see VIEW_PRESETS. */
+      anglePreset?: Partial<{ elevationDeg: number; elevationFloorDeg: number }>;
+    },
+  ) {
     this.container = container;
     // The look-and-feel picked on the Settings screen (main menu) — read fresh at construction
     // time, so a new game always starts with whatever was last saved there.
     const theme = opts?.theme ?? loadTheme();
     this.materials = createMaterials(theme.pieceColor, theme.pieceFinish);
     this.pieceFactories = opts?.pieceFactories ?? PIECE_FACTORIES;
+    const pieceHeightAllowance = opts?.pieceHeightAllowance ?? 1.3;
+    this.framingPoints = [
+      ...Board3D.FRAMING_POINTS,
+      [-0.5, pieceHeightAllowance, -4],
+      [0.5, pieceHeightAllowance, -4],
+      [-0.5, pieceHeightAllowance, 4],
+      [0.5, pieceHeightAllowance, 4],
+    ];
+    this.viewPresets = { ...Board3D.VIEW_PRESETS, angle: { ...Board3D.VIEW_PRESETS.angle, ...opts?.anglePreset } };
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -205,19 +231,21 @@ export class Board3D {
 
   /**
    * Points (in board-local world space) the camera must keep in frame: the 8x8 board plane's
-   * own corners edge-to-edge (the actual "whole board must fit" requirement), plus modest
-   * headroom for a corner piece's height and for a tall center-file piece (king/queen) at the
-   * back rank — generous enough to cover chess, checkers and Corners' rectangle formation
-   * (which fills every square in each corner, right up to the board edge). Also the outer
+   * own corners edge-to-edge (the actual "whole board must fit" requirement), plus the outer
    * corners of each side's captured-piece rest column (REST_GUARANTEE_Z, not the column's full
    * depth — see that constant), so a growing pile of captures stays on screen instead of getting
    * cropped on narrow or notched-phone-landscape screens; a piece beyond that range can still run
-   * off the edge, more so on the near-overhead "topdown" camera than "angle"/"table".
+   * off the edge, more so on the near-overhead "topdown" camera than "angle"/"table". Generous
+   * enough to cover chess, checkers and Corners' rectangle formation (which fills every square in
+   * each corner, right up to the board edge). The piece-height headroom for a tall center-file
+   * piece (king/queen) at the back rank is NOT here — it's instance-specific (see
+   * pieceHeightAllowance in the constructor and framingPoints below), since checkers' flat discs
+   * need far less vertical clearance than a chess king and can afford a noticeably steeper camera
+   * angle as a result.
    */
   private static readonly FRAMING_POINTS: [number, number, number][] = [
     [-4, 0, -4], [4, 0, -4], [-4, 0, 4], [4, 0, 4],
     [-4, 0.5, -4], [4, 0.5, -4], [-4, 0.5, 4], [4, 0.5, 4],
-    [-0.5, 1.3, -4], [0.5, 1.3, -4], [-0.5, 1.3, 4], [0.5, 1.3, 4],
     [-Board3D.REST_OUTER_X, 0.5, Board3D.REST_GUARANTEE_Z], [-Board3D.REST_OUTER_X, 0.5, -Board3D.REST_GUARANTEE_Z],
     [Board3D.REST_OUTER_X, 0.5, Board3D.REST_GUARANTEE_Z], [Board3D.REST_OUTER_X, 0.5, -Board3D.REST_GUARANTEE_Z],
   ];
@@ -254,11 +282,7 @@ export class Board3D {
     const marginRad = (1.3 * Math.PI) / 180;
     let maxH = 0;
     let maxV = 0;
-    // Trays deliberately aren't part of the "must fit" set: their own depth (Z) reads as a much
-    // larger vertical angle than the board's, which forced a wide-open FOV that left the board
-    // itself small in the middle of the frame. The board is what has to fill the screen; trays
-    // just get whatever's left and are cropped on narrow screens.
-    for (const [px, py, pz] of Board3D.FRAMING_POINTS) {
+    for (const [px, py, pz] of this.framingPoints) {
       const vx = px - Cx;
       const vy = py - Cy;
       const vz = pz - Cz;
@@ -307,7 +331,7 @@ export class Board3D {
   private applyResponsiveFraming(aspect: number, height: number) {
     const portraitness = Math.max(0, Math.min(1, 1 - aspect)); // 0 on wide screens, up to ~1 on tall phones
     const shortScreen = aspect > 1.15 ? Math.max(0, Math.min(1, (560 - height) / 340)) : 0; // 0 at h>=560, 1 at h<=220
-    const preset = Board3D.VIEW_PRESETS[this.viewMode];
+    const preset = this.viewPresets[this.viewMode];
     // A camera looking down a deep scene from a steep angle needs far more vertical FOV than
     // horizontal (the board's front-to-back depth, plus piece height, projects mostly onto the
     // screen's Y axis) — on a wide/short phone-landscape screen that vertical requirement leaves

@@ -41,7 +41,14 @@ export class CheckersController {
   constructor(container: HTMLElement, opts: CheckersControllerOptions) {
     this.mode = opts.mode;
     this.difficulty = opts.difficulty;
-    this.board = new Board3D(container, { pieceFactories: CHECKER_FACTORIES });
+    // Checkers pieces are flat discs (a crowned king tops out ~0.44 units, vs. a chess king's
+    // ~1.3), so the default "angle" camera can sit noticeably steeper/closer without clipping —
+    // the board's far edge lands nearer the top of the screen instead of the shallower chess angle.
+    this.board = new Board3D(container, {
+      pieceFactories: CHECKER_FACTORIES,
+      pieceHeightAllowance: 0.55,
+      anglePreset: { elevationDeg: 82, elevationFloorDeg: 58 },
+    });
     this.board.onSquareClick = (sq) => this.handleSquareClick(sq);
 
     if (opts.mode === "ai") {
