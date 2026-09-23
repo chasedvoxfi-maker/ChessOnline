@@ -4,9 +4,11 @@ import { loadPhotoTexture } from "./textureLoader";
 
 /** Outer edge of the board+frame (see board.ts: 8 squares + 2×0.4 frame thickness). */
 const BOARD_OUTER_HALF = 4.4;
-const REST_GAP = 0.5;
-/** How far out (world X) captured pieces rest, just clear of the board's frame — there's no
- * separate tray box any more, they simply stand on the tabletop itself. */
+// Wider than the board's own frame would strictly need: the FOV solver (Board3D.FRAMING_POINTS)
+// keeps whatever this resolves to on screen, so a bigger gap mostly just reads as more breathing
+// room between the board and the captured pieces on wide/landscape screens — verified against the
+// reported device's exact landscape viewport (844×390 CSS px) across all three camera modes.
+const REST_GAP = 1.8;
 /** World X where the nearest captured-piece rest slot sits, just clear of the board's frame —
  * exported so the FOV framing solver (Board3D.FRAMING_POINTS) can guarantee it stays on screen
  * even on narrow phones, instead of only the board itself. */
