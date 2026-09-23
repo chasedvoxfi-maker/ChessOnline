@@ -978,6 +978,8 @@ button {
   border-radius: 999px;
   padding: 0.3rem 0.65rem 0.3rem 0.3rem;
   backdrop-filter: blur(10px);
+  /* pulled in past .hud's own shared padding, right into the top-left corner */
+  margin: -0.6rem 0 0 -0.6rem;
 }
 
 .turn-dot {
@@ -1193,7 +1195,7 @@ button {
    arrows step through the three camera modes, with a small caption underneath. */
 .cam-mode-widget {
   position: fixed;
-  left: calc(0.5rem + env(safe-area-inset-left));
+  left: env(safe-area-inset-left);
   top: 50%;
   transform: translateY(-50%);
   z-index: 15;
@@ -1250,6 +1252,44 @@ button {
   width: 32px;
   height: 28px;
   font-size: 1rem;
+}
+
+/* Persistent prev/next for the in-game playlist, pinned under the hamburger menu button so
+   switching tracks doesn't need opening the dropdown first. */
+.music-nav-widget {
+  position: fixed;
+  top: calc(1rem + 44px + 0.5rem + env(safe-area-inset-top));
+  right: calc(1rem + env(safe-area-inset-right));
+  z-index: 15;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 0.4rem 0.5rem;
+  backdrop-filter: blur(10px);
+}
+
+.music-nav-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.music-nav-btn:hover {
+  border-color: var(--gold);
+}
+
+.music-nav-icon {
+  font-size: 0.85rem;
 }
 
 .captured-trays {

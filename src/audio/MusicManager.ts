@@ -151,6 +151,13 @@ export class MusicManager {
     if (this.queuePos[theme] >= this.queue[theme].length) this.reshuffle(theme);
   }
 
+  /** Moves back to the previous track in the shuffled order — unlike advance(), wraps to the end
+   * of the SAME order rather than reshuffling, so "back" genuinely revisits what just played. */
+  private retreat(theme: MusicTheme) {
+    this.queuePos[theme]--;
+    if (this.queuePos[theme] < 0) this.queuePos[theme] = Math.max(0, this.queue[theme].length - 1);
+  }
+
   /** Starts (or switches to) a theme. Safe to call before any user gesture — it'll just stay
    * silent until unlock(). Always reshuffles, so returning to a theme (e.g. back at the menu
    * after a game) starts a fresh random order rather than resuming the previous one. */
@@ -182,10 +189,22 @@ export class MusicManager {
     }
   }
 
-  /** Manually skips to the next track in the shuffled order — the in-game "skip" button calls this. */
+  /** Manually skips to the next track in the shuffled order — the in-game "skip forward" button calls this. */
   skipNext(theme: MusicTheme) {
     if (!this.queue[theme].length) this.reshuffle(theme);
     else this.advance(theme);
+    if (this.theme === theme && this.unlocked) {
+      this.generation++;
+      this.stopVoices();
+      this.stopFile();
+      this.tryPlayFile(theme, this.generation);
+    }
+  }
+
+  /** Manually goes back to the previous track in the shuffled order — the in-game "skip back" button calls this. */
+  skipPrev(theme: MusicTheme) {
+    if (!this.queue[theme].length) this.reshuffle(theme);
+    else this.retreat(theme);
     if (this.theme === theme && this.unlocked) {
       this.generation++;
       this.stopVoices();

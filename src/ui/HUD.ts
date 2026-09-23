@@ -112,6 +112,11 @@ export class HUD {
         <button class="cam-mode-btn cam-flip-btn" data-action="cam-flip" title="Перевернуть камеру на сторону соперника">🔄</button>
         <span class="cam-mode-caption">переворот камеры<br />на сторону соперника</span>
       </div>
+      <div class="music-nav-widget">
+        <button class="music-nav-btn" data-action="music-prev" title="Предыдущий трек">◀</button>
+        <span class="music-nav-icon">🎵</span>
+        <button class="music-nav-btn" data-action="music-next" title="Следующий трек">▶</button>
+      </div>
       <div class="check-banner hidden">Шах!</div>
       <div style="flex:1"></div>
       <div class="captured-trays">
@@ -185,6 +190,19 @@ export class HUD {
     const trackNext = dropdown.querySelector<HTMLButtonElement>('[data-action="track-next"]')!;
     trackNext.addEventListener("click", (e) => {
       e.stopPropagation();
+      musicManager.unlock();
+      musicManager.skipNext("game");
+      trackSelect.value = musicManager.getCurrentTrackId("game") ?? "";
+    });
+
+    // A persistent prev/next widget alongside the camera controls, so switching tracks doesn't
+    // need opening the hamburger menu first — same "game" playlist/shuffle as the picker above.
+    this.el.querySelector('[data-action="music-prev"]')!.addEventListener("click", () => {
+      musicManager.unlock();
+      musicManager.skipPrev("game");
+      trackSelect.value = musicManager.getCurrentTrackId("game") ?? "";
+    });
+    this.el.querySelector('[data-action="music-next"]')!.addEventListener("click", () => {
       musicManager.unlock();
       musicManager.skipNext("game");
       trackSelect.value = musicManager.getCurrentTrackId("game") ?? "";
