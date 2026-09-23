@@ -51,10 +51,15 @@ export class MusicManager {
   private sparkleTimer: number | null = null;
   private generation = 0; // bumped on stop()/theme change so stale timeouts no-op
   private fileEl: HTMLAudioElement | null = null;
-  /** Which track of each theme's playlist is current — randomized the first time a theme plays,
-   * then advances by one (wrapping) each time a track ends, or jumps directly on selectTrack(). */
-  private trackIndex: Record<MusicTheme, number> = { menu: 0, game: 0 };
-  private trackIndexInitialized: Record<MusicTheme, boolean> = { menu: false, game: false };
+  /** Each theme's current play order — a fresh shuffle of TRACKS[theme], rebuilt every time that
+   * theme is (re)entered (see play()) or its track list changes (see notifyTracksChanged()), so
+   * re-opening the same theme later — e.g. back at the menu after a game — picks a genuinely new
+   * running order rather than resuming the last one. Wrapping past the end also reshuffles rather
+   * than repeating the same cycle. Working with actual Track objects (not numeric indices into
+   * TRACKS[theme]) sidesteps index-drift bugs entirely when the underlying list is pruned/grown
+   * at runtime. */
+  private queue: Record<MusicTheme, Track[]> = { menu: [], game: [] };
+  private queuePos: Record<MusicTheme, number> = { menu: 0, game: 0 };
   /**
    * iOS Safari ties audio permission to the AudioContext's CREATION, not just resume() —
    * a context built asynchronously (e.g. from a network response, off the gesture's call
@@ -93,7 +98,9 @@ export class MusicManager {
     const wasUnlocked = this.unlocked;
     this.unlocked = true;
     this.ensureContext();
-    if (this.fileEl) void this.fileEl.play().catch(() => {});
+    // Never resume a file while muted — otherwise every later unlock() call (fired from nearly
+    // every button's click handler, not just the mute toggle itself) would audibly un-pause it.
+    if (this.fileEl && !this.muted) void this.fileEl.play().catch(() => {});
     // a play() call before the first unlock only recorded the desired theme — start it now
     if (!wasUnlocked && this.theme) this.tryPlayFile(this.theme, this.generation);
   }
@@ -103,7 +110,14 @@ export class MusicManager {
     if (this.musicGain && this.ctx) {
       this.musicGain.gain.linearRampToValueAtTime(m ? 0 : this.volume, this.ctx.currentTime + 0.5);
     }
-    if (this.fileEl) this.fileEl.volume = m ? 0 : this.volume;
+    if (this.fileEl) {
+      this.fileEl.volume = m ? 0 : this.volume;
+      // Actually pause (not just silence) a file track when muted — belt-and-braces against any
+      // other code path (unlock() guards its own call, but this covers every case) later calling
+      // .play() on it and having it become audible again while the player thinks music is off.
+      if (m) this.fileEl.pause();
+      else if (this.unlocked) void this.fileEl.play().catch(() => {});
+    }
     try {
       localStorage.setItem(MUTE_KEY, m ? "1" : "0");
     } catch {
@@ -115,35 +129,67 @@ export class MusicManager {
     return this.muted;
   }
 
-  /** Starts (or switches to) a theme. Safe to call before any user gesture — it'll just stay silent until unlock(). */
+  private shuffle<T>(arr: T[]): T[] {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  /** Fresh random play order for a theme, built from its current track list. */
+  private reshuffle(theme: MusicTheme) {
+    this.queue[theme] = this.shuffle(TRACKS[theme]);
+    this.queuePos[theme] = 0;
+  }
+
+  /** Moves to the next track in the shuffled order, reshuffling once the order is exhausted so
+   * the next lap isn't the same running order repeated. */
+  private advance(theme: MusicTheme) {
+    this.queuePos[theme]++;
+    if (this.queuePos[theme] >= this.queue[theme].length) this.reshuffle(theme);
+  }
+
+  /** Starts (or switches to) a theme. Safe to call before any user gesture — it'll just stay
+   * silent until unlock(). Always reshuffles, so returning to a theme (e.g. back at the menu
+   * after a game) starts a fresh random order rather than resuming the previous one. */
   play(theme: MusicTheme) {
     if (this.theme === theme) return;
     this.stopVoices();
     this.stopFile();
     this.theme = theme;
     this.generation++;
-    if (!this.trackIndexInitialized[theme]) {
-      const list = TRACKS[theme];
-      this.trackIndex[theme] = list.length ? Math.floor(Math.random() * list.length) : 0;
-      this.trackIndexInitialized[theme] = true;
-    }
+    this.reshuffle(theme);
     if (!this.unlocked) return; // unlock() will start this theme once a real gesture arrives
     this.tryPlayFile(theme, this.generation);
   }
 
   /**
    * Jumps straight to a specific track in a theme's playlist (the in-game track picker calls
-   * this) — once that track ends, the normal auto-advance just continues cycling the list from
-   * there, wrapping back to the start.
+   * this) — once that track ends, the normal auto-advance just continues cycling the (shuffled)
+   * list from there.
    */
   selectTrack(theme: MusicTheme, trackId: string) {
-    const idx = TRACKS[theme].findIndex((t) => t.id === trackId);
+    if (!this.queue[theme].length) this.reshuffle(theme);
+    const idx = this.queue[theme].findIndex((t) => t.id === trackId);
     if (idx === -1) return;
-    this.trackIndex[theme] = idx;
-    this.trackIndexInitialized[theme] = true;
+    this.queuePos[theme] = idx;
     if (this.theme === theme && this.unlocked) {
       this.generation++;
       this.stopVoices();
+      this.tryPlayFile(theme, this.generation);
+    }
+  }
+
+  /** Manually skips to the next track in the shuffled order — the in-game "skip" button calls this. */
+  skipNext(theme: MusicTheme) {
+    if (!this.queue[theme].length) this.reshuffle(theme);
+    else this.advance(theme);
+    if (this.theme === theme && this.unlocked) {
+      this.generation++;
+      this.stopVoices();
+      this.stopFile();
       this.tryPlayFile(theme, this.generation);
     }
   }
@@ -153,33 +199,37 @@ export class MusicManager {
   }
 
   /**
-   * Call after TRACKS[theme] changes at runtime (a custom track was added/removed — see
-   * trackLibrary.ts). If that theme is currently playing, restarts it so the new list takes
-   * effect immediately instead of waiting for the current track to end or the theme to switch.
+   * Call after TRACKS[theme] changes at runtime (a custom track was added/removed, or the
+   * startup probe of the bundled menu-music-N.mp3 slots finished pruning the missing ones — see
+   * trackLibrary.ts). Rebuilding the shuffle from the current list sidesteps any index-drift
+   * entirely (the old numeric-index scheme could clamp a stale index onto the wrong track after
+   * pruning). If that theme is currently playing, restarts it so the new list takes effect
+   * immediately instead of waiting for the current track to end or the theme to switch.
    */
   notifyTracksChanged(theme: MusicTheme) {
-    const list = TRACKS[theme];
-    if (!list.length) {
-      this.trackIndexInitialized[theme] = false;
-    } else if (this.trackIndex[theme] >= list.length) {
-      this.trackIndex[theme] = list.length - 1;
-    }
+    const currentId = this.getCurrentTrackId(theme);
+    this.reshuffle(theme);
     if (this.theme !== theme || !this.unlocked) return;
+    // A track that's already loaded and actually playing shouldn't get cut off just because the
+    // list changed elsewhere in it (this fires on every page load, once the startup probe of the
+    // bundled menu-music-N.mp3 slots resolves — interrupting whatever had already started a
+    // moment earlier would be pure waste). Only restart if what's currently on deck is gone now,
+    // or nothing successfully started yet (e.g. it's still mid-error-retry).
+    if (this.fileEl && !this.fileEl.paused && currentId && TRACKS[theme].some((t) => t.id === currentId)) {
+      const idx = this.queue[theme].findIndex((t) => t.id === currentId);
+      if (idx !== -1) this.queuePos[theme] = idx; // keep future auto-advance in sync with the reshuffle
+      return;
+    }
     this.generation++;
     this.stopVoices();
     this.stopFile();
-    if (!this.trackIndexInitialized[theme] && list.length) {
-      this.trackIndex[theme] = list.length - 1; // jump straight to the just-added track
-      this.trackIndexInitialized[theme] = true;
-    }
     this.tryPlayFile(theme, this.generation);
   }
 
   getCurrentTrackId(theme: MusicTheme): string | null {
-    const list = TRACKS[theme];
-    if (!list.length) return null;
-    const idx = this.trackIndexInitialized[theme] ? this.trackIndex[theme] : 0;
-    return list[idx]?.id ?? null;
+    const q = this.queue[theme];
+    if (!q.length) return null;
+    return q[this.queuePos[theme] % q.length]?.id ?? null;
   }
 
   stop() {
@@ -215,14 +265,14 @@ export class MusicManager {
    * every track rather than repeating the same one forever.
    */
   private tryPlayFile(theme: MusicTheme, generation: number, attempt = 0) {
-    const list = TRACKS[theme];
+    const list = this.queue[theme];
     if (!list.length || attempt >= list.length) {
       this.ensureContext();
       this.scheduleChord(theme, generation);
       this.scheduleSparkle(theme, generation);
       return;
     }
-    const track = list[this.trackIndex[theme]];
+    const track = list[this.queuePos[theme] % list.length];
     const audio = new Audio(track.src);
     audio.volume = this.muted ? 0 : this.volume;
     this.fileEl = audio;
@@ -231,18 +281,18 @@ export class MusicManager {
       if (handled || generation !== this.generation) return;
       handled = true;
       if (this.fileEl === audio) this.fileEl = null;
-      this.trackIndex[theme] = (this.trackIndex[theme] + 1) % list.length;
+      this.advance(theme);
       this.tryPlayFile(theme, generation, attempt + 1);
     });
     audio.addEventListener("ended", () => {
       if (handled || generation !== this.generation) return; // superseded by a theme switch or manual track pick
       handled = true;
-      this.trackIndex[theme] = (this.trackIndex[theme] + 1) % list.length;
+      this.advance(theme);
       this.tryPlayFile(theme, generation);
     });
-    // autoplay may be blocked until unlock() runs from a user gesture — that's not a
-    // missing-file case, so it must never trigger the skip/fallback logic.
-    audio.play().catch(() => {});
+    // autoplay may be blocked until unlock() runs from a user gesture, or the theme may just be
+    // muted right now — neither is a missing-file case, so neither should trigger skip/fallback.
+    if (!this.muted) audio.play().catch(() => {});
   }
 
   private stopVoices() {

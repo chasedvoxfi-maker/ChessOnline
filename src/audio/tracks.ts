@@ -7,24 +7,28 @@ export interface Track {
 }
 
 /**
- * Each theme's playlist. The player picks a random track to start a theme with, and cycles
- * through the rest of the list (looping back to the start) as each track ends — a manual pick
- * (see MusicManager.selectTrack) just moves the cursor, the auto-advance keeps going from there.
- * A slot whose file doesn't exist in public/audio/ is simply skipped (MusicManager tries the
- * next one), so the menu list below can list all 10 numbered slots up front.
+ * Each theme's playlist. MusicManager shuffles a theme's list into a fresh random play order
+ * every time that theme is (re)entered, and reshuffles again once the order is exhausted — a
+ * manual pick (see MusicManager.selectTrack) or the in-game skip button just moves the cursor
+ * within that order. A slot whose file doesn't exist in public/audio/ is simply skipped
+ * (MusicManager tries the next one), so both lists below can list all 10 numbered slots up
+ * front regardless of how many are actually filled in.
  *
- * To add music for the menu: drop menu-music-N.mp3 (N = 1..10) into public/audio/ — no code
- * change needed, it's picked up automatically (random start, cycling, README has the exact
- * naming). To add more than 10, or more "game" tracks, add an extra { id, title, src } entry
- * per file to the relevant list here.
+ * To add music: drop menu-music-N.mp3 or game-music-N.mp3 (N = 1..10) into public/audio/ — no
+ * code change needed, it's picked up automatically (README has the exact naming). To add more
+ * than 10 for either theme, add an extra { id, title, src } entry to the relevant list here.
  */
-const MENU_SLOTS = 10;
+const SLOTS_PER_THEME = 10;
+
+function numberedSlots(theme: "menu" | "game", label: string): Track[] {
+  return Array.from({ length: SLOTS_PER_THEME }, (_, i) => ({
+    id: `${theme}-${i + 1}`,
+    title: `${label} ${i + 1}`,
+    src: `/ChessOnline/audio/${theme}-music-${i + 1}.mp3`,
+  }));
+}
 
 export const TRACKS: Record<MusicTheme, Track[]> = {
-  menu: Array.from({ length: MENU_SLOTS }, (_, i) => ({
-    id: `menu-${i + 1}`,
-    title: `Тема меню ${i + 1}`,
-    src: `/ChessOnline/audio/menu-music-${i + 1}.mp3`,
-  })),
-  game: [{ id: "game-1", title: "Тема партии", src: "/ChessOnline/audio/game-music.mp3" }],
+  menu: numberedSlots("menu", "Тема меню"),
+  game: numberedSlots("game", "Тема партии"),
 };

@@ -1162,6 +1162,20 @@ button {
   padding: 0.4rem 0.5rem;
 }
 
+.hud-track-next {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  font-size: 0.9rem;
+}
+.hud-track-next:hover {
+  border-color: var(--gold);
+}
+
 .hud-menu-divider {
   grid-column: 1 / -1;
   height: 1px;
