@@ -91,14 +91,10 @@ export class HUD {
       <div class="hud-menu-dropdown hidden">
         ${rows.map((r) => `<button class="hud-menu-row" data-action="${r.action}"><span class="hud-menu-icon">${r.icon}</span><span class="hud-menu-label">${r.label}</span></button>`).join("")}
         <div class="hud-menu-row hud-track-row">
+          <button class="hud-track-nav" data-action="track-prev" title="Предыдущий трек">◀</button>
           <span class="hud-menu-icon">🎼</span>
-          <select class="hud-track-select" data-action="track-select" aria-label="Трек музыки">
-            ${musicManager
-              .getTracks("game")
-              .map((t) => `<option value="${t.id}">${t.title}</option>`)
-              .join("")}
-          </select>
-          <button class="hud-track-next" data-action="track-next" title="Следующий трек">⏭</button>
+          <span class="hud-menu-label">Музыка</span>
+          <button class="hud-track-nav" data-action="track-next" title="Следующий трек">▶</button>
         </div>
         <div class="hud-menu-divider"></div>
         <button class="hud-menu-row hud-menu-exit" data-action="exit"><span class="hud-menu-icon">🚪</span><span class="hud-menu-label">Выйти из игры</span></button>
@@ -176,36 +172,28 @@ export class HUD {
       closeMenu();
     });
 
-    // Picking a track jumps straight to it; it keeps cycling through the rest of the (shuffled)
-    // playlist from there as each track ends, same as the automatic random-start behavior.
-    const trackSelect = dropdown.querySelector<HTMLSelectElement>('[data-action="track-select"]')!;
-    trackSelect.value = musicManager.getCurrentTrackId("game") ?? "";
-    trackSelect.addEventListener("click", (e) => e.stopPropagation());
-    trackSelect.addEventListener("change", () => {
+    // Prev/next step through the "game" playlist directly — no track list to pick from, just
+    // rewind either direction from whatever's currently playing.
+    dropdown.querySelector('[data-action="track-prev"]')!.addEventListener("click", (e) => {
+      e.stopPropagation();
       musicManager.unlock();
-      musicManager.selectTrack("game", trackSelect.value);
-      trackSelect.value = musicManager.getCurrentTrackId("game") ?? "";
+      musicManager.skipPrev("game");
     });
-
-    const trackNext = dropdown.querySelector<HTMLButtonElement>('[data-action="track-next"]')!;
-    trackNext.addEventListener("click", (e) => {
+    dropdown.querySelector('[data-action="track-next"]')!.addEventListener("click", (e) => {
       e.stopPropagation();
       musicManager.unlock();
       musicManager.skipNext("game");
-      trackSelect.value = musicManager.getCurrentTrackId("game") ?? "";
     });
 
     // A persistent prev/next widget alongside the camera controls, so switching tracks doesn't
-    // need opening the hamburger menu first — same "game" playlist/shuffle as the picker above.
+    // need opening the hamburger menu first — same "game" playlist as the row above.
     this.el.querySelector('[data-action="music-prev"]')!.addEventListener("click", () => {
       musicManager.unlock();
       musicManager.skipPrev("game");
-      trackSelect.value = musicManager.getCurrentTrackId("game") ?? "";
     });
     this.el.querySelector('[data-action="music-next"]')!.addEventListener("click", () => {
       musicManager.unlock();
       musicManager.skipNext("game");
-      trackSelect.value = musicManager.getCurrentTrackId("game") ?? "";
     });
 
     const camCurrent = this.el.querySelector<HTMLSpanElement>(".cam-mode-current")!;

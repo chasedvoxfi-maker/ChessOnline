@@ -1148,23 +1148,7 @@ button {
   line-height: 1.25;
 }
 
-.hud-track-row {
-  cursor: pointer;
-}
-
-.hud-track-select {
-  flex: 1;
-  min-width: 0;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  color: var(--text-main);
-  font-family: inherit;
-  font-size: 0.85rem;
-  padding: 0.4rem 0.5rem;
-}
-
-.hud-track-next {
+.hud-track-nav {
   flex-shrink: 0;
   width: 2rem;
   height: 2rem;
@@ -1174,7 +1158,7 @@ button {
   color: var(--text-main);
   font-size: 0.9rem;
 }
-.hud-track-next:hover {
+.hud-track-nav:hover {
   border-color: var(--gold);
 }
 
