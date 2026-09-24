@@ -6,7 +6,7 @@ import { CornersController } from "./corners/CornersController";
 import { OnlineSession } from "./net/OnlineSession";
 import { Menu, type ContinueInfo } from "./ui/Menu";
 import { HUD } from "./ui/HUD";
-import { RotateGate, tryLockLandscape } from "./ui/RotateGate";
+import { RotateGate, tryLockLandscape, releaseLandscapeLock } from "./ui/RotateGate";
 import { soundManager } from "./audio/SoundManager";
 import { musicManager } from "./audio/MusicManager";
 import { trackLibraryReady } from "./audio/trackLibrary";
@@ -77,6 +77,7 @@ function showMenu() {
   if (activeRotateGate) {
     activeRotateGate.dispose();
     activeRotateGate = null;
+    void releaseLandscapeLock();
   }
   clearApp();
 

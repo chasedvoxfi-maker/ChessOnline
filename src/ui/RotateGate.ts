@@ -60,3 +60,21 @@ export async function tryLockLandscape() {
     // unsupported or denied — RotateGate covers this case visually
   }
 }
+
+/** Undoes tryLockLandscape() — call this when leaving the game screen. Without it the page stays
+ * fullscreen and orientation-locked to landscape after returning to the (portrait) menu, which on
+ * the browsers that support the lock made the browser fight the phone's actual (portrait) sensor
+ * orientation and visibly jitter the layout up and down as it kept trying to reconcile the two. */
+export async function releaseLandscapeLock() {
+  try {
+    const orientation = screen.orientation as (ScreenOrientation & { unlock?: () => void }) | undefined;
+    orientation?.unlock?.();
+  } catch {
+    // unsupported — nothing to release
+  }
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+  } catch {
+    // already left fullscreen, or the browser refused — nothing more to do
+  }
+}
