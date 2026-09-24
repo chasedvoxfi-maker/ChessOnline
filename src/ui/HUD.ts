@@ -113,9 +113,17 @@ export class HUD {
         <span class="cam-mode-caption">переворот камеры<br />на сторону соперника</span>
       </div>
       <div class="music-nav-widget">
-        <button class="music-nav-btn" data-action="music-prev" title="Предыдущий трек">◀</button>
-        <span class="music-nav-icon">🎵</span>
-        <button class="music-nav-btn" data-action="music-next" title="Следующий трек">▶</button>
+        <div class="music-nav-row">
+          <button class="music-nav-btn" data-action="music-prev" title="Предыдущий трек">◀</button>
+          <span class="music-nav-icon">🎵</span>
+          <button class="music-nav-btn" data-action="music-next" title="Следующий трек">▶</button>
+        </div>
+        <div class="music-nav-divider"></div>
+        <div class="music-nav-row">
+          <button class="music-nav-btn" data-action="music-vol-down" title="Тише">−</button>
+          <span class="music-nav-icon">🔊</span>
+          <button class="music-nav-btn" data-action="music-vol-up" title="Громче">+</button>
+        </div>
       </div>
       <div class="check-banner hidden">Шах!</div>
       <div style="flex:1"></div>
@@ -198,6 +206,14 @@ export class HUD {
     this.el.querySelector('[data-action="music-next"]')!.addEventListener("click", () => {
       musicManager.unlock();
       musicManager.skipNext("game");
+    });
+    this.el.querySelector('[data-action="music-vol-down"]')!.addEventListener("click", () => {
+      musicManager.unlock();
+      musicManager.setVolume(musicManager.getVolume() - 0.1);
+    });
+    this.el.querySelector('[data-action="music-vol-up"]')!.addEventListener("click", () => {
+      musicManager.unlock();
+      musicManager.setVolume(musicManager.getVolume() + 0.1);
     });
 
     const camCurrent = this.el.querySelector<HTMLSpanElement>(".cam-mode-current")!;

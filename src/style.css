@@ -270,6 +270,36 @@ button {
   background: rgba(8, 6, 12, 0.55);
 }
 
+.music-volume-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  margin-bottom: 0.6rem;
+  border-radius: 12px;
+  border: 1px solid rgba(212, 175, 106, 0.22);
+  background: rgba(8, 6, 12, 0.4);
+}
+
+.music-volume-label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.music-volume-slider {
+  flex: 1;
+  accent-color: var(--gold);
+}
+
+.music-volume-value {
+  min-width: 1.3rem;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gold-bright);
+}
+
 .music-theme-block {
   display: flex;
   flex-direction: column;
@@ -1245,8 +1275,8 @@ button {
   font-size: 1rem;
 }
 
-/* Persistent prev/next for the in-game playlist, pinned under the hamburger menu button so
-   switching tracks doesn't need opening the dropdown first. */
+/* Persistent prev/next (and volume +/-) for the in-game playlist, pinned under the hamburger
+   menu button so switching tracks/volume doesn't need opening the dropdown first. */
 .music-nav-widget {
   position: fixed;
   top: calc(1rem + 44px + 0.5rem + env(safe-area-inset-top));
@@ -1254,13 +1284,25 @@ button {
   z-index: 15;
   pointer-events: auto;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.3rem;
   background: var(--bg-panel);
   border: 1px solid var(--panel-border);
   border-radius: 14px;
   padding: 0.4rem 0.5rem;
   backdrop-filter: blur(10px);
+}
+
+.music-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.music-nav-divider {
+  height: 1px;
+  margin: 0.1rem 0;
+  background: var(--panel-border);
 }
 
 .music-nav-btn {

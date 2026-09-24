@@ -42,14 +42,13 @@ export class CheckersController {
     this.mode = opts.mode;
     this.difficulty = opts.difficulty;
     // Checkers pieces are flat discs (a crowned king tops out ~0.44 units, vs. a chess king's
-    // ~1.3), so the default camera can sit noticeably steeper/closer without clipping — pushed
-    // steep enough, with a lower near-side look-at bias than chess, that the board reaches from
-    // near the bottom of the screen to near the top instead of leaving wood table visible on both
-    // ends. The player can still nudge further with the HUD's +/- tilt control.
+    // ~1.3), so the default camera can sit a bit steeper than chess's without clipping — see
+    // Board3D.DEFAULT_CAMERA_PRESET for how these numbers were solved (maximize both-axes fill,
+    // not just guessed). The player can still nudge further with the HUD's +/- tilt control.
     this.board = new Board3D(container, {
       pieceFactories: CHECKER_FACTORIES,
       pieceHeightAllowance: 0.55,
-      cameraPreset: { elevationDeg: 88, elevationFloorDeg: 74, lookZ: 1 },
+      cameraPreset: { elevationDeg: 87, elevationFloorDeg: 55, lookZ: 1 },
     });
     this.board.onSquareClick = (sq) => this.handleSquareClick(sq);
 

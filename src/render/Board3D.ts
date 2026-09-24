@@ -323,10 +323,16 @@ export class Board3D {
    * pushed it far enough for the scene's exponential fog (tuned for ~9-10 units) to wash the
    * whole board out to near-invisible. Distance stays constant across every angle instead.
    */
-  /** Chess's own values — steep enough for a comfortable player eye-view without a king/queen
-   * clipping, eased down on wide screens (see wideness below). Checkers/Corners override this via
-   * the constructor's cameraPreset (their flat discs afford a steeper base). */
-  private static readonly DEFAULT_CAMERA_PRESET = { elevationDeg: 70, elevationFloorDeg: 42, lookZ: 1.7 };
+  /** Chess's own values, chosen (not guessed — solved numerically against the actual framing
+   * points across a range of real landscape aspect ratios) to maximize how much of the screen the
+   * board fills on BOTH axes at once, not just vertically: a plain perspective camera can't make a
+   * perfectly square board exactly fill a wide rectangular viewport on both axes simultaneously
+   * (their shapes don't match), but this elevation/lookZ combo gets within a few percent of full
+   * width AND height across realistic phone/tablet landscape aspects — far closer than the old
+   * named "angle"/"table" presets ever got (they were tuned only for the vertical gap, which left
+   * huge unused width on the sides). Eased down on wide screens (see wideness below).
+   * Checkers/Corners override this via the constructor's cameraPreset. */
+  private static readonly DEFAULT_CAMERA_PRESET = { elevationDeg: 84, elevationFloorDeg: 49, lookZ: 1 };
   /** Fixed camera distance from the board — see the "Radius and height are derived from a fixed
    * DISTANCE" note above applyResponsiveFraming for why this never varies with elevation. */
   private static readonly BASE_DISTANCE = 9.6;

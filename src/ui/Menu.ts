@@ -321,6 +321,11 @@ export class Menu {
 
         <div class="settings-group">
           <h3 class="settings-group-title">Музыка</h3>
+          <div class="music-volume-row">
+            <span class="music-volume-label">Громкость</span>
+            <input type="range" class="music-volume-slider" min="1" max="10" step="1" value="${Math.round(musicManager.getVolume() * 10)}" />
+            <span class="music-volume-value">${Math.round(musicManager.getVolume() * 10)}</span>
+          </div>
           ${this.musicThemeBlockHtml("menu", "Главное меню")}
           ${this.musicThemeBlockHtml("game", "Во время партии")}
           <p class="settings-note">Загруженные треки хранятся только в этом браузере и не передаются никуда.</p>
@@ -376,6 +381,14 @@ export class Menu {
   }
 
   private wireMusicSection() {
+    const volumeSlider = this.contentEl.querySelector<HTMLInputElement>(".music-volume-slider")!;
+    const volumeValue = this.contentEl.querySelector<HTMLSpanElement>(".music-volume-value")!;
+    volumeSlider.addEventListener("input", () => {
+      this.unlockAudio();
+      const level = Number(volumeSlider.value);
+      volumeValue.textContent = String(level);
+      musicManager.setVolume(level / 10);
+    });
     this.contentEl.querySelectorAll<HTMLButtonElement>(".music-track-remove").forEach((btn) => {
       btn.addEventListener("click", async () => {
         soundManager.playSelect();
