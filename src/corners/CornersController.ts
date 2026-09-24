@@ -44,12 +44,11 @@ export class CornersController {
     this.formation = opts.resume?.corners?.formation ?? opts.formation;
     this.game = new CornersGame(this.formation);
     // Same flat checker-style discs as Checkers (and Corners never promotes to a taller king), so
-    // both cameras get the same steeper treatment — see CheckersController for the reasoning.
+    // the camera gets the same steeper base — see CheckersController for the reasoning.
     this.board = new Board3D(container, {
       pieceFactories: CORNERS_FACTORIES,
       pieceHeightAllowance: 0.55,
-      anglePreset: { elevationDeg: 88, elevationFloorDeg: 74, lookZ: 1 },
-      tablePreset: { elevationDeg: 80, elevationFloorDeg: 64, lookZ: 1 },
+      cameraPreset: { elevationDeg: 88, elevationFloorDeg: 74, lookZ: 1 },
     });
     this.board.onSquareClick = (sq) => this.handleSquareClick(sq);
 

@@ -1,7 +1,7 @@
 import type { GameOverInfo, PieceColor, PieceType } from "../game/types";
 import { soundManager } from "../audio/SoundManager";
 import { musicManager } from "../audio/MusicManager";
-import type { ViewMode } from "../render/Board3D";
+import { CAMERA_TILT_MIN, CAMERA_TILT_MAX } from "../render/Board3D";
 
 /** "m" (checkers man) is the only non-chess type shown in the captured tray — Corners has no captures. */
 export type CapturedGlyphType = PieceType | "m";
@@ -14,23 +14,27 @@ function glyph(type: CapturedGlyphType, color: PieceColor) {
   return color === "w" ? WHITE_GLYPHS[type] : BLACK_GLYPHS[type];
 }
 
-const VIEW_MODE_KEY = "chessonline-view-mode-v2";
-const VIEW_MODE_ORDER: ViewMode[] = ["angle", "table", "topdown"];
-const VIEW_MODE_NAME: Record<ViewMode, string> = { angle: "Обычный", table: "Стол", topdown: "Сверху" };
+const CAMERA_TILT_KEY = "chessonline-camera-tilt-v1";
+/** Degrees the +/- widget nudges per press. */
+const TILT_STEP = 5;
 
-function loadViewModePref(): ViewMode {
+function clampTilt(deg: number): number {
+  return Math.max(CAMERA_TILT_MIN, Math.min(CAMERA_TILT_MAX, deg));
+}
+
+function loadTiltPref(): number {
   try {
-    const v = localStorage.getItem(VIEW_MODE_KEY);
-    if (v === "angle" || v === "table" || v === "topdown") return v;
+    const v = Number(localStorage.getItem(CAMERA_TILT_KEY));
+    if (Number.isFinite(v)) return clampTilt(v);
   } catch {
     // best-effort only
   }
-  return "angle";
+  return 0;
 }
 
-function saveViewModePref(mode: ViewMode) {
+function saveTiltPref(deg: number) {
   try {
-    localStorage.setItem(VIEW_MODE_KEY, mode);
+    localStorage.setItem(CAMERA_TILT_KEY, String(deg));
   } catch {
     // best-effort only
   }
@@ -42,8 +46,8 @@ export interface HUDCallbacks {
   onMenu: () => void;
   onRematch: () => void;
   onMuteToggle: (muted: boolean) => void;
-  /** Switches between the plain angled view, the raised table skin, and the dead-overhead table skin. */
-  onViewToggle: (mode: ViewMode) => void;
+  /** Sets the camera's tilt offset (degrees off its per-game base elevation, +/- CAMERA_TILT_MIN/MAX). */
+  onTiltChange: (offsetDeg: number) => void;
   /** Manually rotates the camera 180° to peek at the position from the opponent's side. */
   onFlipCamera: () => void;
   /** Persists the current game so it can be resumed later. Returns false if this game can't be saved (online). */
@@ -100,10 +104,10 @@ export class HUD {
         <button class="hud-menu-row hud-menu-exit" data-action="exit"><span class="hud-menu-icon">🚪</span><span class="hud-menu-label">Выйти из игры</span></button>
       </div>
       <div class="cam-mode-widget">
-        <button class="cam-mode-btn" data-action="cam-up" title="Следующий вид камеры">▲</button>
+        <button class="cam-mode-btn" data-action="cam-up" title="Круче (+5°)">+</button>
         <span class="cam-mode-current"></span>
-        <button class="cam-mode-btn" data-action="cam-down" title="Предыдущий вид камеры">▼</button>
-        <span class="cam-mode-caption">переключение камеры</span>
+        <button class="cam-mode-btn" data-action="cam-down" title="Более полого (−5°)">−</button>
+        <span class="cam-mode-caption">наклон камеры</span>
         <div class="cam-mode-divider"></div>
         <button class="cam-mode-btn cam-flip-btn" data-action="cam-flip" title="Перевернуть камеру на сторону соперника">🔄</button>
         <span class="cam-mode-caption">переворот камеры<br />на сторону соперника</span>
@@ -197,21 +201,24 @@ export class HUD {
     });
 
     const camCurrent = this.el.querySelector<HTMLSpanElement>(".cam-mode-current")!;
-    let viewMode = loadViewModePref();
+    const camUpBtn = this.el.querySelector<HTMLButtonElement>('[data-action="cam-up"]')!;
+    const camDownBtn = this.el.querySelector<HTMLButtonElement>('[data-action="cam-down"]')!;
+    let tiltOffset = loadTiltPref();
     const applyCamWidget = () => {
-      camCurrent.textContent = VIEW_MODE_NAME[viewMode];
+      camCurrent.textContent = tiltOffset > 0 ? `+${tiltOffset}°` : `${tiltOffset}°`;
+      camUpBtn.disabled = tiltOffset >= CAMERA_TILT_MAX;
+      camDownBtn.disabled = tiltOffset <= CAMERA_TILT_MIN;
     };
-    const stepView = (delta: 1 | -1) => {
-      const idx = VIEW_MODE_ORDER.indexOf(viewMode);
-      viewMode = VIEW_MODE_ORDER[(idx + delta + VIEW_MODE_ORDER.length) % VIEW_MODE_ORDER.length];
+    const stepTilt = (delta: number) => {
+      tiltOffset = clampTilt(tiltOffset + delta);
       applyCamWidget();
-      saveViewModePref(viewMode);
-      this.callbacks.onViewToggle(viewMode);
+      saveTiltPref(tiltOffset);
+      this.callbacks.onTiltChange(tiltOffset);
     };
     applyCamWidget();
-    this.callbacks.onViewToggle(viewMode); // apply the saved preference right away
-    this.el.querySelector('[data-action="cam-up"]')!.addEventListener("click", () => stepView(1));
-    this.el.querySelector('[data-action="cam-down"]')!.addEventListener("click", () => stepView(-1));
+    this.callbacks.onTiltChange(tiltOffset); // apply the saved preference right away
+    camUpBtn.addEventListener("click", () => stepTilt(TILT_STEP));
+    camDownBtn.addEventListener("click", () => stepTilt(-TILT_STEP));
     this.el.querySelector('[data-action="cam-flip"]')!.addEventListener("click", () => this.callbacks.onFlipCamera());
   }
 

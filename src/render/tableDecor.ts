@@ -39,10 +39,9 @@ function photoTableTexture(theme: TableThemeId): THREE.Texture {
 }
 
 /**
- * The wooden tabletop under the board — the "table" / "topdown" camera skins. Captured pieces
- * rest directly on it, next to the board (see Board3D.restSlotPosition/nextRestSlot); there's no
- * separate tray box. Hidden by default — Board3D toggles the group's visibility via
- * setViewMode().
+ * The wooden tabletop under the board, visible at every camera tilt. Captured pieces rest
+ * directly on it, next to the board (see Board3D.restSlotPosition/nextRestSlot); there's no
+ * separate tray box.
  */
 export function buildTableDecor(tableTheme: TableThemeId = "light"): TableDecor {
   const group = new THREE.Group();

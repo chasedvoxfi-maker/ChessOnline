@@ -20,7 +20,11 @@ interface ActiveAnim {
   onComplete?: () => void;
 }
 
-export type ViewMode = "angle" | "table" | "topdown";
+/** Absolute bounds on the player-adjustable camera tilt offset (see setTiltOffsetDeg) — shared
+ * with the HUD widget so its +/- buttons can grey out at the same limits Board3D itself clamps
+ * to, instead of the two drifting out of sync. */
+export const CAMERA_TILT_MIN = -25;
+export const CAMERA_TILT_MAX = 25;
 
 function easeInOutCubic(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -46,10 +50,10 @@ export class Board3D {
   private container: HTMLElement;
   private materials: PieceMaterials;
   private pieceFactories: Record<string, PieceFactory>;
-  /** Instance framing points and "angle" view preset — see the constructor's pieceHeightAllowance
-   * and anglePreset options, and the FRAMING_POINTS comment, for why these vary per game type. */
+  /** Instance framing points and camera preset — see the constructor's pieceHeightAllowance and
+   * cameraPreset options, and the FRAMING_POINTS comment, for why these vary per game type. */
   private framingPoints: [number, number, number][];
-  private viewPresets: Record<ViewMode, { elevationDeg: number; elevationFloorDeg: number; distance: number; lookZ: number }>;
+  private cameraPreset: { elevationDeg: number; elevationFloorDeg: number; lookZ: number };
   private pieceMeshes = new Map<string, THREE.Group>();
   private highlightLayer: THREE.Group;
   private raycastPlane: THREE.Mesh;
@@ -63,11 +67,11 @@ export class Board3D {
   private legalMarkers: THREE.Mesh[] = [];
   private lastMoveMarkers: THREE.Mesh[] = [];
 
-  // Camera angle — "angle" is a shallower player eye-view, "table" and "topdown" are
-  // progressively more overhead. The wooden tabletop (captured pieces rest directly on it) is
-  // always visible; only the camera's elevation changes between modes.
+  // Camera elevation — continuously adjustable by the player via setTiltOffsetDeg (a persistent
+  // +/- nudge on top of the per-game base preset), rather than a fixed set of named modes. The
+  // wooden tabletop (captured pieces rest directly on it) is always visible at any tilt.
   private tableDecor: TableDecor;
-  private viewMode: ViewMode = "angle";
+  private tiltOffsetDeg = 0;
   private capturedGroup = new THREE.Group();
   private capturedCounts: Record<PieceColor, number> = { w: 0, b: 0 };
 
@@ -90,16 +94,15 @@ export class Board3D {
     opts?: {
       pieceFactories?: Record<string, PieceFactory>;
       theme?: AppTheme;
-      /** How tall a piece can get at the back rank (world Y) — the "angle"/"table" cameras
-       * reserve exactly this much headroom. Chess needs room for a king/queen; checkers' flat
-       * discs don't, so a lower value lets those cameras sit noticeably closer/steeper. */
+      /** How tall a piece can get at the back rank (world Y) — the camera reserves exactly this
+       * much headroom. Chess needs room for a king/queen; checkers' (and Corners') flat discs
+       * don't, so a lower value lets the camera sit noticeably closer/steeper. */
       pieceHeightAllowance?: number;
-      /** Overrides the "angle" (default) view's elevation, both at its normal steepest (tall
-       * screens) and eased-down floor (wide screens), and/or its near-side look-at bias — see
-       * VIEW_PRESETS. */
-      anglePreset?: Partial<{ elevationDeg: number; elevationFloorDeg: number; lookZ: number }>;
-      /** Same as anglePreset, for the "table" view instead. */
-      tablePreset?: Partial<{ elevationDeg: number; elevationFloorDeg: number; lookZ: number }>;
+      /** Overrides the base camera elevation, both at its normal steepest (tall/portrait screens)
+       * and eased-down floor (wide screens), and/or its near-side look-at bias — see
+       * DEFAULT_CAMERA_PRESET. The player can then nudge further from this base with
+       * setTiltOffsetDeg. */
+      cameraPreset?: Partial<{ elevationDeg: number; elevationFloorDeg: number; lookZ: number }>;
     },
   ) {
     this.container = container;
@@ -116,11 +119,7 @@ export class Board3D {
       [-0.5, pieceHeightAllowance, 4],
       [0.5, pieceHeightAllowance, 4],
     ];
-    this.viewPresets = {
-      ...Board3D.VIEW_PRESETS,
-      angle: { ...Board3D.VIEW_PRESETS.angle, ...opts?.anglePreset },
-      table: { ...Board3D.VIEW_PRESETS.table, ...opts?.tablePreset },
-    };
+    this.cameraPreset = { ...Board3D.DEFAULT_CAMERA_PRESET, ...opts?.cameraPreset };
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -231,9 +230,9 @@ export class Board3D {
   private static readonly REST_SPACING_X = 0.62;
   private static readonly REST_OUTER_X = REST_CENTER_X + Board3D.REST_SPACING_X / 2;
   /** Furthest Z-offset (in spacingZ units, from centerOutRowOffset) any of the 8 rows in a
-   * column reaches — ±4 covers all of them symmetrically. "angle"/"table" fit this whole range
-   * comfortably; the near-overhead "topdown" camera's required FOV to cover it hits the 115° cap
-   * below regardless, so its far captures can still run past the edge either way. */
+   * column reaches — ±4 covers all of them symmetrically. Most of the tilt range fits this whole
+   * range comfortably; toward the near-overhead end, the required FOV to cover it hits the 115°
+   * cap below regardless, so its far captures can still run past the edge either way. */
   private static readonly REST_GUARANTEE_Z = 4 * Board3D.REST_SPACING_Z;
 
   /**
@@ -242,7 +241,7 @@ export class Board3D {
    * corners of each side's captured-piece rest column (REST_GUARANTEE_Z, not the column's full
    * depth — see that constant), so a growing pile of captures stays on screen instead of getting
    * cropped on narrow or notched-phone-landscape screens; a piece beyond that range can still run
-   * off the edge, more so on the near-overhead "topdown" camera than "angle"/"table". Generous
+   * off the edge, more so toward the near-overhead end of the tilt range. Generous
    * enough to cover chess, checkers and Corners' rectangle formation (which fills every square in
    * each corner, right up to the board edge). The piece-height headroom for a tall center-file
    * piece (king/queen) at the back rank is NOT here — it's instance-specific (see
@@ -324,21 +323,25 @@ export class Board3D {
    * pushed it far enough for the scene's exponential fog (tuned for ~9-10 units) to wash the
    * whole board out to near-invisible. Distance stays constant across every angle instead.
    */
-  private static readonly VIEW_PRESETS: Record<ViewMode, { elevationDeg: number; elevationFloorDeg: number; distance: number; lookZ: number }> = {
-    angle: { elevationDeg: 70, elevationFloorDeg: 42, distance: 9.6, lookZ: 1.7 },
-    table: { elevationDeg: 62, elevationFloorDeg: 34, distance: 9.6, lookZ: 1.7 },
-    // Dead overhead, centered on the board (no near/far bias — lookZ: 0) rather than eased per
-    // aspect: with the look-at target centered, the board's own square footprint is already
-    // symmetric in the camera's H/V axes, so the FOV solver naturally frames it as a square
-    // filling the screen's shorter dimension, no extra tuning needed. 89° (not 90°) avoids the
-    // degenerate straight-down case where the camera's "right" axis is undefined.
-    topdown: { elevationDeg: 89, elevationFloorDeg: 89, distance: 8.6, lookZ: 0 },
-  };
+  /** Chess's own values — steep enough for a comfortable player eye-view without a king/queen
+   * clipping, eased down on wide screens (see wideness below). Checkers/Corners override this via
+   * the constructor's cameraPreset (their flat discs afford a steeper base). */
+  private static readonly DEFAULT_CAMERA_PRESET = { elevationDeg: 70, elevationFloorDeg: 42, lookZ: 1.7 };
+  /** Fixed camera distance from the board — see the "Radius and height are derived from a fixed
+   * DISTANCE" note above applyResponsiveFraming for why this never varies with elevation. */
+  private static readonly BASE_DISTANCE = 9.6;
+  /** Absolute floor/ceiling the *resulting* elevation is clamped to after the base preset, its
+   * wide-screen easing, and the player's tilt offset are all combined — independent of
+   * CAMERA_TILT_MIN/MAX, which only bound the offset itself. 87° (not 90°) avoids the degenerate
+   * straight-down case where the camera's "right" axis is undefined; 18° keeps a legible eye-view
+   * at the shallow end for any game's preset. */
+  private static readonly ELEVATION_MIN = 18;
+  private static readonly ELEVATION_MAX = 87;
 
   private applyResponsiveFraming(aspect: number, height: number) {
     const portraitness = Math.max(0, Math.min(1, 1 - aspect)); // 0 on wide screens, up to ~1 on tall phones
     const shortScreen = aspect > 1.15 ? Math.max(0, Math.min(1, (560 - height) / 340)) : 0; // 0 at h>=560, 1 at h<=220
-    const preset = this.viewPresets[this.viewMode];
+    const preset = this.cameraPreset;
     // A camera looking down a deep scene from a steep angle needs far more vertical FOV than
     // horizontal (the board's front-to-back depth, plus piece height, projects mostly onto the
     // screen's Y axis) — on a wide/short phone-landscape screen that vertical requirement leaves
@@ -346,11 +349,16 @@ export class Board3D {
     // "fits". Easing the elevation angle down on wide screens compresses that depth back toward
     // the horizontal axis instead, trading a bit of "looking straight down" for a board that
     // actually fills the width; square/portrait screens have vertical room to spare, so they keep
-    // the full requested angle.
+    // the full requested angle. The player's own tilt offset (setTiltOffsetDeg) is layered on top
+    // of this auto-eased baseline, then the combined result is clamped to ELEVATION_MIN/MAX.
     const wideness = Math.max(0, Math.min(1, (aspect - 1.15) / (2.2 - 1.15)));
-    const elevationDeg = preset.elevationDeg - wideness * (preset.elevationDeg - preset.elevationFloorDeg);
+    const autoElevationDeg = preset.elevationDeg - wideness * (preset.elevationDeg - preset.elevationFloorDeg);
+    const elevationDeg = Math.max(
+      Board3D.ELEVATION_MIN,
+      Math.min(Board3D.ELEVATION_MAX, autoElevationDeg + this.tiltOffsetDeg),
+    );
     const elevationRad = (elevationDeg * Math.PI) / 180;
-    const distance = preset.distance - shortScreen * 0.8;
+    const distance = Board3D.BASE_DISTANCE - shortScreen * 0.8;
 
     this.camRadius = distance * Math.cos(elevationRad) + portraitness * 0.5;
     this.camHeight = distance * Math.sin(elevationRad) + portraitness * 1.4; // steepen a bit further on tall phones — a wide board wastes less vertical space viewed from more overhead
@@ -395,19 +403,17 @@ export class Board3D {
   }
 
   /**
-   * Switches camera angle: "angle" is a shallower player eye-view, "table" a bit more overhead,
-   * "topdown" dead overhead so the board reads as one large square. The wooden tabletop itself
-   * stays visible in every mode — it used to disappear behind a flat background in "angle",
-   * which just read as a bug.
+   * Nudges the camera's elevation by an absolute number of degrees off its per-game base preset
+   * (positive = steeper/more overhead, negative = flatter/more eye-level toward the player),
+   * clamped to CAMERA_TILT_MIN/MAX. The HUD's +/- widget persists whatever value it last set and
+   * passes it back in here on every new game — a fresh instance otherwise starts at 0 (i.e. right
+   * at its base preset).
    */
-  setViewMode(mode: ViewMode) {
-    if (this.viewMode === mode) return;
-    this.viewMode = mode;
+  setTiltOffsetDeg(deg: number) {
+    const clamped = Math.max(CAMERA_TILT_MIN, Math.min(CAMERA_TILT_MAX, deg));
+    if (clamped === this.tiltOffsetDeg) return;
+    this.tiltOffsetDeg = clamped;
     this.handleResize();
-  }
-
-  getViewMode() {
-    return this.viewMode;
   }
 
   /** Row 0, 1, 2, 3, … within a column maps to Z-offset 0, -1, +1, -2, +2, … (spacingZ units) —

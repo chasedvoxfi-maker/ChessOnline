@@ -14,7 +14,6 @@ import { maybeShowAddToHomeScreenHint } from "./ui/AddToHomeScreen";
 import { loadSavedGame, clearSavedGame, type SavedGameState, type GameKind } from "./game/SaveGame";
 import type { CornersFormation } from "./corners/CornersGame";
 import type { Difficulty, GameMode } from "./game/types";
-import type { ViewMode } from "./render/Board3D";
 
 // The very first tap/click anywhere unlocks audio — belt-and-braces alongside the specific
 // menu/HUD buttons that also call unlock(), since a couple of mobile browsers (notably iOS
@@ -139,7 +138,7 @@ function buildHud(
     restart(): void;
     saveNow(): boolean;
     undo(): boolean;
-    board: { setViewMode(mode: ViewMode): void; flipCamera(): void };
+    board: { setTiltOffsetDeg(deg: number): void; flipCamera(): void };
   },
 ): HUD {
   return new HUD(
@@ -152,7 +151,7 @@ function buildHud(
       onMenu: () => showMenu(),
       onRematch: () => ctrl.restart(),
       onMuteToggle: () => {},
-      onViewToggle: (mode) => ctrl.board.setViewMode(mode),
+      onTiltChange: (deg) => ctrl.board.setTiltOffsetDeg(deg),
       onFlipCamera: () => ctrl.board.flipCamera(),
       onSave: () => ctrl.saveNow(),
       onUndo: () => ctrl.undo(),
