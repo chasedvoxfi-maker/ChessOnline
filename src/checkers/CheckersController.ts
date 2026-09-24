@@ -44,10 +44,14 @@ export class CheckersController {
     // Checkers pieces are flat discs (a crowned king tops out ~0.44 units, vs. a chess king's
     // ~1.3), so the default "angle" camera can sit noticeably steeper/closer without clipping —
     // the board's far edge lands nearer the top of the screen instead of the shallower chess angle.
+    // "Table" gets the same treatment: both views are pushed steep enough, with a lower near-side
+    // look-at bias than chess, that the board reaches from near the bottom of the screen to near
+    // the top instead of leaving wood table visible on both ends.
     this.board = new Board3D(container, {
       pieceFactories: CHECKER_FACTORIES,
       pieceHeightAllowance: 0.55,
-      anglePreset: { elevationDeg: 82, elevationFloorDeg: 58 },
+      anglePreset: { elevationDeg: 88, elevationFloorDeg: 74, lookZ: 1 },
+      tablePreset: { elevationDeg: 80, elevationFloorDeg: 64, lookZ: 1 },
     });
     this.board.onSquareClick = (sq) => this.handleSquareClick(sq);
 

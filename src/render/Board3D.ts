@@ -95,8 +95,11 @@ export class Board3D {
        * discs don't, so a lower value lets those cameras sit noticeably closer/steeper. */
       pieceHeightAllowance?: number;
       /** Overrides the "angle" (default) view's elevation, both at its normal steepest (tall
-       * screens) and eased-down floor (wide screens) — see VIEW_PRESETS. */
-      anglePreset?: Partial<{ elevationDeg: number; elevationFloorDeg: number }>;
+       * screens) and eased-down floor (wide screens), and/or its near-side look-at bias — see
+       * VIEW_PRESETS. */
+      anglePreset?: Partial<{ elevationDeg: number; elevationFloorDeg: number; lookZ: number }>;
+      /** Same as anglePreset, for the "table" view instead. */
+      tablePreset?: Partial<{ elevationDeg: number; elevationFloorDeg: number; lookZ: number }>;
     },
   ) {
     this.container = container;
@@ -113,7 +116,11 @@ export class Board3D {
       [-0.5, pieceHeightAllowance, 4],
       [0.5, pieceHeightAllowance, 4],
     ];
-    this.viewPresets = { ...Board3D.VIEW_PRESETS, angle: { ...Board3D.VIEW_PRESETS.angle, ...opts?.anglePreset } };
+    this.viewPresets = {
+      ...Board3D.VIEW_PRESETS,
+      angle: { ...Board3D.VIEW_PRESETS.angle, ...opts?.anglePreset },
+      table: { ...Board3D.VIEW_PRESETS.table, ...opts?.tablePreset },
+    };
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
