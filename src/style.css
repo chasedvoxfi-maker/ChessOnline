@@ -567,16 +567,19 @@ button {
 
 .back-btn {
   align-self: flex-start;
-  background: none;
-  border: none;
+  background: rgba(8, 6, 12, 0.7);
+  border: 1px solid rgba(212, 175, 106, 0.2);
+  border-radius: 999px;
   color: var(--text-dim);
   font-size: 0.9rem;
-  padding: 0.3rem 0;
+  padding: 0.3rem 0.9rem;
   margin-bottom: -0.4rem;
+  backdrop-filter: blur(6px);
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8);
 }
 .back-btn:hover {
   color: var(--gold-bright);
+  border-color: rgba(212, 175, 106, 0.4);
 }
 
 .join-link {
@@ -646,12 +649,11 @@ button {
   top: calc(100% + 0.6rem);
   right: 0;
   z-index: 5;
-  width: 250px;
-  max-width: 76vw;
+  width: min(360px, 82vw);
   padding: 0.55rem;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.45rem;
   background: rgba(15, 11, 20, 0.95);
   backdrop-filter: blur(16px);
   border: 1px solid var(--panel-border);
@@ -704,6 +706,28 @@ button {
   font-weight: 500;
   font-size: 0.68rem;
   margin-top: 0.1rem;
+}
+
+/* The three game cards reuse the full menu-btn card look (icon badge, bold title, description
+   line) instead of the compact single-line row the confirm/join sub-rows still use — so the
+   very first thing a player sees when they tap "Играть" already matches the visual weight of
+   the mode-select cards one tap later. */
+.launcher-item.menu-btn {
+  padding: 0.75rem 1.3rem 0.75rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 175, 106, 0.3);
+  background: rgba(8, 6, 12, 0.9);
+  font-family: "Cinzel", serif;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--gold-bright);
+}
+.launcher-item.menu-btn:hover {
+  background: rgba(26, 20, 34, 0.88);
+  border-color: var(--gold-bright);
+}
+.launcher-item.menu-btn small {
+  font-family: "Manrope", sans-serif;
 }
 
 .launcher-join {

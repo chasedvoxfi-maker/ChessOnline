@@ -228,9 +228,12 @@ export class Menu {
     dropdown.innerHTML = `
       ${GAME_LABELS.map(
         (g) => `
-        <button class="launcher-item" data-game="${g.value}">
+        <button class="launcher-item menu-btn" data-game="${g.value}">
           ${iconBadge(g.icon)}
-          <span>${g.label}${this.continueInfo[g.value] ? "<small>есть сохранённая игра</small>" : ""}</span>
+          <span>
+            ${g.label}${this.continueInfo[g.value] ? "<small>есть сохранённая игра</small>" : ""}
+            <span class="desc">${g.desc}</span>
+          </span>
         </button>`,
       ).join("")}
       <button class="launcher-item launcher-join" data-action="join-anywhere">Есть код? Присоединиться</button>
