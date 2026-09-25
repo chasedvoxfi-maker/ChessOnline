@@ -17,32 +17,12 @@ import { TRACKS, type Track } from "./tracks";
 export type MusicTheme = "menu" | "game";
 
 const MUTE_KEY = "chessonline-music-muted-v1";
-const VOLUME_KEY = "chessonline-music-volume-v1";
-const DEFAULT_VOLUME = 0.3;
 
 function loadMutedPref(): boolean {
   try {
     return localStorage.getItem(MUTE_KEY) === "1";
   } catch {
     return false;
-  }
-}
-
-function loadVolumePref(): number {
-  try {
-    const v = Number(localStorage.getItem(VOLUME_KEY));
-    if (Number.isFinite(v) && v > 0 && v <= 1) return v;
-  } catch {
-    // best-effort only
-  }
-  return DEFAULT_VOLUME;
-}
-
-function saveVolumePref(v: number) {
-  try {
-    localStorage.setItem(VOLUME_KEY, String(v));
-  } catch {
-    // best-effort only
   }
 }
 
@@ -66,7 +46,7 @@ export class MusicManager {
   private musicGain: GainNode | null = null;
   private filter: BiquadFilterNode | null = null;
   private muted = loadMutedPref();
-  private volume = loadVolumePref();
+  private volume = 0.3;
   private activeVoices: ActiveVoice[] = [];
   private theme: MusicTheme | null = null;
   private chordTimer: number | null = null;
@@ -149,22 +129,6 @@ export class MusicManager {
 
   isMuted() {
     return this.muted;
-  }
-
-  /** 0-1. Takes effect immediately (both the generative pad and a playing file track), even while
-   * muted — the mute toggle and the volume level are independent, so unmuting later resumes at
-   * whatever level was last set. */
-  setVolume(v: number) {
-    this.volume = Math.max(0.1, Math.min(1, v));
-    if (this.musicGain && this.ctx && !this.muted) {
-      this.musicGain.gain.linearRampToValueAtTime(this.volume, this.ctx.currentTime + 0.15);
-    }
-    if (this.fileEl && !this.muted) this.fileEl.volume = this.volume;
-    saveVolumePref(this.volume);
-  }
-
-  getVolume() {
-    return this.volume;
   }
 
   private shuffle<T>(arr: T[]): T[] {

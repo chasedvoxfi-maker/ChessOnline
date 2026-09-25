@@ -3,14 +3,10 @@ import { soundManager } from "../audio/SoundManager";
 import { musicManager } from "../audio/MusicManager";
 import { CAMERA_TILT_MIN, CAMERA_TILT_MAX } from "../render/Board3D";
 
-/** "m" (checkers man) is the only non-chess type shown in the captured tray — Corners has no captures. */
-export type CapturedGlyphType = PieceType | "m";
+const WHITE_GLYPHS: Record<PieceType, string> = { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" };
+const BLACK_GLYPHS: Record<PieceType, string> = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
 
-const WHITE_GLYPHS: Record<CapturedGlyphType, string> = { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙", m: "⛀" };
-const BLACK_GLYPHS: Record<CapturedGlyphType, string> = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟", m: "⛂" };
-const PIECE_VALUE: Record<CapturedGlyphType, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0, m: 1 };
-
-function glyph(type: CapturedGlyphType, color: PieceColor) {
+function glyph(type: PieceType, color: PieceColor) {
   return color === "w" ? WHITE_GLYPHS[type] : BLACK_GLYPHS[type];
 }
 
@@ -113,24 +109,12 @@ export class HUD {
         <span class="cam-mode-caption">переворот камеры<br />на сторону соперника</span>
       </div>
       <div class="music-nav-widget">
-        <div class="music-nav-row">
-          <button class="music-nav-btn" data-action="music-prev" title="Предыдущий трек">◀</button>
-          <span class="music-nav-icon">🎵</span>
-          <button class="music-nav-btn" data-action="music-next" title="Следующий трек">▶</button>
-        </div>
-        <div class="music-nav-divider"></div>
-        <div class="music-nav-row">
-          <button class="music-nav-btn" data-action="music-vol-down" title="Тише">−</button>
-          <span class="music-nav-icon">🔊</span>
-          <button class="music-nav-btn" data-action="music-vol-up" title="Громче">+</button>
-        </div>
+        <button class="music-nav-btn" data-action="music-prev" title="Предыдущий трек">◀</button>
+        <span class="music-nav-icon">🎵</span>
+        <button class="music-nav-btn" data-action="music-next" title="Следующий трек">▶</button>
       </div>
       <div class="check-banner hidden">Шах!</div>
       <div style="flex:1"></div>
-      <div class="captured-trays">
-        <div class="captured-tray" data-tray="w"></div>
-        <div class="captured-tray" data-tray="b"></div>
-      </div>
     `;
 
     const menuBtn = this.el.querySelector<HTMLButtonElement>('[data-action="menu"]')!;
@@ -206,14 +190,6 @@ export class HUD {
     this.el.querySelector('[data-action="music-next"]')!.addEventListener("click", () => {
       musicManager.unlock();
       musicManager.skipNext("game");
-    });
-    this.el.querySelector('[data-action="music-vol-down"]')!.addEventListener("click", () => {
-      musicManager.unlock();
-      musicManager.setVolume(musicManager.getVolume() - 0.1);
-    });
-    this.el.querySelector('[data-action="music-vol-up"]')!.addEventListener("click", () => {
-      musicManager.unlock();
-      musicManager.setVolume(musicManager.getVolume() + 0.1);
     });
 
     const camCurrent = this.el.querySelector<HTMLSpanElement>(".cam-mode-current")!;
@@ -294,19 +270,6 @@ export class HUD {
     label.textContent = color === "w" ? "Ход белых" : "Ход чёрных";
     hint.textContent = this.isHotseat ? "передайте устройство" : "";
     this.el.querySelector(".check-banner")!.classList.toggle("hidden", !inCheck);
-  }
-
-  updateCaptured(captured: { type: CapturedGlyphType; color: PieceColor }[]) {
-    const whiteTray = this.el.querySelector('[data-tray="w"]')!; // pieces captured BY white (black pieces)
-    const blackTray = this.el.querySelector('[data-tray="b"]')!;
-    const byWhite = captured.filter((c) => c.color === "b");
-    const byBlack = captured.filter((c) => c.color === "w");
-    const render = (list: { type: CapturedGlyphType; color: PieceColor }[]) => {
-      const sorted = [...list].sort((a, b) => PIECE_VALUE[b.type] - PIECE_VALUE[a.type]);
-      return sorted.map((c) => glyph(c.type, c.color)).join(" ");
-    };
-    whiteTray.textContent = render(byWhite);
-    blackTray.textContent = render(byBlack);
   }
 
   promptPromotion(color: PieceColor): Promise<PieceType> {

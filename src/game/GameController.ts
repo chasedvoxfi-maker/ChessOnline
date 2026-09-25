@@ -16,8 +16,8 @@ export interface GameControllerOptions {
 
 export interface GameControllerCallbacks {
   onTurnChange?: (turn: PieceColor) => void;
-  onMove?: (move: MoveResult, captured: { type: PieceType; color: PieceColor }[]) => void;
-  onUndo?: (turn: PieceColor, captured: { type: PieceType; color: PieceColor }[]) => void;
+  onMove?: (move: MoveResult) => void;
+  onUndo?: (turn: PieceColor) => void;
   onGameOver?: (info: GameOverInfo) => void;
   onPromotionNeeded?: (color: PieceColor) => Promise<PieceType>;
   onOpponentDisconnected?: () => void;
@@ -32,8 +32,6 @@ export class GameController {
   private mode: GameMode;
   private difficulty?: Difficulty;
   private selected: string | null = null;
-  private capturedByWhite: PieceType[] = []; // pieces white has captured (i.e. black pieces taken)
-  private capturedByBlack: PieceType[] = [];
   private localHumanColor: PieceColor = "w"; // for ai/online modes: which side the local human controls
   private busy = false;
   private gameOver = false;
@@ -65,7 +63,6 @@ export class GameController {
       if (this.mode === "hotseat") this.board.setOrientation(this.game.turn);
     }
 
-    this.recomputeCaptured();
     this.syncBoard();
 
     if (opts.resume && this.mode === "ai" && this.game.turn !== this.localHumanColor) {
@@ -96,29 +93,6 @@ export class GameController {
       savedAt: Date.now(),
       chess: { fen: this.game.fen() },
     };
-  }
-
-  private static readonly START_COUNTS: Record<PieceType, number> = { p: 8, n: 2, b: 2, r: 2, q: 1, k: 1 };
-
-  /** Derives captured-piece lists from the current board, rather than tracking pushes — this stays
-   * correct across undo, resume-from-FEN, and any other path that doesn't go through executeMove. */
-  private recomputeCaptured() {
-    const onBoard: Record<PieceColor, Record<PieceType, number>> = {
-      w: { p: 0, n: 0, b: 0, r: 0, q: 0, k: 0 },
-      b: { p: 0, n: 0, b: 0, r: 0, q: 0, k: 0 },
-    };
-    for (const piece of this.game.pieces()) onBoard[piece.color][piece.type]++;
-
-    const missing = (counts: Record<PieceType, number>): PieceType[] => {
-      const out: PieceType[] = [];
-      for (const type of ["q", "r", "b", "n", "p"] as PieceType[]) {
-        for (let i = 0; i < GameController.START_COUNTS[type] - counts[type]; i++) out.push(type);
-      }
-      return out;
-    };
-
-    this.capturedByWhite = missing(onBoard.b); // black pieces white has captured
-    this.capturedByBlack = missing(onBoard.w); // white pieces black has captured
   }
 
   private syncBoard() {
@@ -251,8 +225,7 @@ export class GameController {
   }
 
   private postMoveUpdates(result: MoveResult) {
-    if (result.captured) this.recomputeCaptured();
-    this.callbacks.onMove?.(result, this.capturedSummary());
+    this.callbacks.onMove?.(result);
 
     if (result.isCheckmate) {
       this.gameOver = true;
@@ -294,13 +267,6 @@ export class GameController {
   private autosave() {
     const state = this.buildSaveState();
     if (state) saveGame(state);
-  }
-
-  capturedSummary() {
-    return [
-      ...this.capturedByWhite.map((type) => ({ type, color: "b" as PieceColor })),
-      ...this.capturedByBlack.map((type) => ({ type, color: "w" as PieceColor })),
-    ];
   }
 
   private async runAITurn() {
@@ -352,7 +318,6 @@ export class GameController {
     this.board.showSelection(null);
     this.board.clearLegalMoves();
     this.board.resetCameraFraming();
-    this.recomputeCaptured();
     this.syncBoard();
 
     this.board.clearCheck();
@@ -364,7 +329,7 @@ export class GameController {
     else this.board.setOrientation(this.localHumanColor);
 
     soundManager.playMove();
-    this.callbacks.onUndo?.(this.game.turn, this.capturedSummary());
+    this.callbacks.onUndo?.(this.game.turn);
     this.autosave();
     return true;
   }
@@ -373,8 +338,6 @@ export class GameController {
     this.gameOver = false;
     this.busy = false;
     this.selected = null;
-    this.capturedByWhite = [];
-    this.capturedByBlack = [];
     this.game.reset();
     this.board.clearCheck();
     this.board.showSelection(null);

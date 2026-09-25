@@ -16,7 +16,7 @@ export interface CheckersControllerOptions {
 
 export interface CheckersControllerCallbacks {
   onTurnChange?: (turn: PieceColor) => void;
-  onMove?: (captured: { type: "m" | "k"; color: PieceColor }[]) => void;
+  onMove?: () => void;
   onGameOver?: (info: GameOverInfo) => void;
   onOpponentDisconnected?: () => void;
 }
@@ -33,8 +33,6 @@ export class CheckersController {
   private localHumanColor: PieceColor = "w";
   private busy = false;
   private gameOver = false;
-  private capturedByWhite: ("m" | "k")[] = [];
-  private capturedByBlack: ("m" | "k")[] = [];
 
   callbacks: CheckersControllerCallbacks = {};
 
@@ -71,7 +69,6 @@ export class CheckersController {
       if (this.mode === "hotseat") this.board.setOrientation(this.game.currentTurn);
     }
 
-    this.recomputeCaptured();
     this.syncBoard();
 
     if (opts.resume && this.mode === "ai" && this.game.currentTurn !== this.localHumanColor) {
@@ -160,7 +157,7 @@ export class CheckersController {
         // rebuild as a king in place, with a little pop
         this.board.promotePiece(result.to, "k", result.color);
       }
-      this.postMoveUpdates(result.isCapture, result.color);
+      this.postMoveUpdates();
     });
   }
 
@@ -194,9 +191,8 @@ export class CheckersController {
     step();
   }
 
-  private postMoveUpdates(wasCapture: boolean, movedColor: PieceColor) {
-    if (wasCapture) this.recomputeCaptured();
-    this.callbacks.onMove?.(this.capturedSummary());
+  private postMoveUpdates() {
+    this.callbacks.onMove?.();
 
     if (this.game.isGameOver()) {
       this.gameOver = true;
@@ -222,7 +218,6 @@ export class CheckersController {
     } else if (this.mode === "ai" && this.game.currentTurn !== this.localHumanColor) {
       void this.runAITurn();
     }
-    void movedColor;
   }
 
   private async runAITurn() {
@@ -243,22 +238,6 @@ export class CheckersController {
     }
   }
 
-  private static readonly START_COUNT = 12;
-
-  private recomputeCaptured() {
-    const onBoard: Record<PieceColor, number> = { w: 0, b: 0 };
-    for (const p of this.game.pieces()) onBoard[p.color]++;
-    this.capturedByWhite = new Array(Math.max(0, CheckersController.START_COUNT - onBoard.b)).fill("m");
-    this.capturedByBlack = new Array(Math.max(0, CheckersController.START_COUNT - onBoard.w)).fill("m");
-  }
-
-  capturedSummary() {
-    return [
-      ...this.capturedByWhite.map((type) => ({ type, color: "b" as PieceColor })),
-      ...this.capturedByBlack.map((type) => ({ type, color: "w" as PieceColor })),
-    ];
-  }
-
   resign() {
     if (this.gameOver) return;
     this.gameOver = true;
@@ -277,14 +256,13 @@ export class CheckersController {
     this.gameOver = false;
     this.deselect();
     this.board.resetCameraFraming();
-    this.recomputeCaptured();
     this.syncBoard();
     if (this.mode === "hotseat") this.board.setOrientation(this.game.currentTurn);
     else this.board.setOrientation(this.localHumanColor);
 
     soundManager.playMove();
     this.callbacks.onTurnChange?.(this.game.currentTurn);
-    this.callbacks.onMove?.(this.capturedSummary());
+    this.callbacks.onMove?.();
     this.autosave();
     return true;
   }
@@ -325,7 +303,6 @@ export class CheckersController {
     this.board.clearCheck();
     this.board.resetCameraFraming();
     this.board.setOrientation(this.mode === "hotseat" ? "w" : this.localHumanColor);
-    this.recomputeCaptured();
     this.syncBoard();
     soundManager.playGameStart();
   }

@@ -193,21 +193,14 @@ function startChessGame(boardContainer: HTMLElement, screen: HTMLElement, opts: 
 
   ctrl.callbacks = {
     onTurnChange: (turn) => hud.setTurn(turn, ctrl.game.inCheck()),
-    onMove: (_move, captured) => {
-      hud.updateCaptured(captured);
-      hud.setTurn(ctrl.game.turn, ctrl.game.inCheck());
-    },
-    onUndo: (turn, captured) => {
-      hud.updateCaptured(captured);
-      hud.setTurn(turn, ctrl.game.inCheck());
-    },
+    onMove: () => hud.setTurn(ctrl.game.turn, ctrl.game.inCheck()),
+    onUndo: (turn) => hud.setTurn(turn, ctrl.game.inCheck()),
     onPromotionNeeded: (color) => hud.promptPromotion(color),
     onGameOver: (info) => hud.showGameOver(info),
     onOpponentDisconnected: () => hud.showDisconnectNotice(),
   };
 
   if (opts.resume) {
-    hud.updateCaptured(ctrl.capturedSummary());
     hud.setTurn(ctrl.game.turn, ctrl.game.inCheck());
   } else {
     hud.setTurn("w", false);
@@ -229,16 +222,12 @@ function startCheckersGame(boardContainer: HTMLElement, screen: HTMLElement, opt
 
   ctrl.callbacks = {
     onTurnChange: (turn) => hud.setTurn(turn, false),
-    onMove: (captured) => {
-      hud.updateCaptured(captured);
-      hud.setTurn(ctrl.game.currentTurn, false);
-    },
+    onMove: () => hud.setTurn(ctrl.game.currentTurn, false),
     onGameOver: (info) => hud.showGameOver(info),
     onOpponentDisconnected: () => hud.showDisconnectNotice(),
   };
 
   if (opts.resume) {
-    hud.updateCaptured(ctrl.capturedSummary());
     hud.setTurn(ctrl.game.currentTurn, false);
   } else {
     hud.setTurn("w", false);
