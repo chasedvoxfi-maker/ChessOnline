@@ -53,7 +53,7 @@ export class Board3D {
   /** Instance framing points and camera preset — see the constructor's pieceHeightAllowance and
    * cameraPreset options, and the FRAMING_POINTS comment, for why these vary per game type. */
   private framingPoints: [number, number, number][];
-  private cameraPreset: { elevationDeg: number; elevationFloorDeg: number; lookZ: number };
+  private cameraPreset: { elevationDeg: number; elevationFloorDeg: number };
   private pieceMeshes = new Map<string, THREE.Group>();
   private highlightLayer: THREE.Group;
   private raycastPlane: THREE.Mesh;
@@ -99,10 +99,10 @@ export class Board3D {
        * don't, so a lower value lets the camera sit noticeably closer/steeper. */
       pieceHeightAllowance?: number;
       /** Overrides the base camera elevation, both at its normal steepest (tall/portrait screens)
-       * and eased-down floor (wide screens), and/or its near-side look-at bias — see
-       * DEFAULT_CAMERA_PRESET. The player can then nudge further from this base with
-       * setTiltOffsetDeg. */
-      cameraPreset?: Partial<{ elevationDeg: number; elevationFloorDeg: number; lookZ: number }>;
+       * and eased-down floor (wide screens) — see DEFAULT_CAMERA_PRESET. The near-side look-at
+       * bias is always solved at runtime (solveSymmetricLookZ), not part of this preset. The
+       * player can nudge the elevation further from this base with setTiltOffsetDeg. */
+      cameraPreset?: Partial<{ elevationDeg: number; elevationFloorDeg: number }>;
     },
   ) {
     this.container = container;
@@ -262,13 +262,19 @@ export class Board3D {
    * analytically (not hand-tuned per device) so it's correct for any aspect ratio and stays
    * correct if the piece models or board size ever change.
    */
-  private computeRequiredFov(aspect: number): number {
+  private static readonly MARGIN_RAD = (1.3 * Math.PI) / 180;
+
+  /** The forward/right/up angles of a single world point relative to a camera at (0, camHeight,
+   * camRadius) looking at (0, camLookY, camLookZ) — the shared trig both computeRequiredFov and
+   * solveSymmetricLookZ are built from, so a candidate camLookZ can be measured before it's
+   * actually committed to this.camLookZ. */
+  private pointAngles(camHeight: number, camRadius: number, camLookY: number, camLookZ: number, px: number, py: number, pz: number) {
     const Cx = 0;
-    const Cy = this.camHeight;
-    const Cz = this.camRadius;
+    const Cy = camHeight;
+    const Cz = camRadius;
     let fx = 0 - Cx;
-    let fy = this.camLookY - Cy;
-    let fz = this.camLookZ - Cz;
+    let fy = camLookY - Cy;
+    let fz = camLookZ - Cz;
     const flen = Math.hypot(fx, fy, fz);
     fx /= flen;
     fy /= flen;
@@ -285,22 +291,57 @@ export class Board3D {
     const uy = rz * fx - rx * fz;
     const uz = rx * fy - 0 * fx;
 
-    const marginRad = (1.3 * Math.PI) / 180;
+    const vx = px - Cx;
+    const vy = py - Cy;
+    const vz = pz - Cz;
+    const fwd = vx * fx + vy * fy + vz * fz;
+    const right = vx * rx + vz * rz;
+    const up = vx * ux + vy * uy + vz * uz;
+    return { up: Math.atan2(up, fwd), right: Math.atan2(right, fwd) };
+  }
+
+  /**
+   * Binary-searches the look-at Z bias that makes the near edge (framing points with pz > 0, the
+   * player's own side) and the far edge (pz < 0) subtend exactly the same vertical angle — so
+   * both touch their respective screen edge with the same margin, instead of a fixed bias always
+   * favoring the far edge and leaving whatever's left over as a gap at the bottom. Board/tray/
+   * piece-height framing points come in symmetric near/far pairs (same |z|) by construction, so
+   * this root always exists within a modest range; ~2.5 comfortably covers every elevation this
+   * camera ever uses. Cheap — a few dozen iterations of pure trig — and only runs once per
+   * resize/tilt change, not per frame.
+   */
+  private solveSymmetricLookZ(camHeight: number, camRadius: number, camLookY: number): number {
+    const diffAt = (lookZ: number) => {
+      let maxFar = 0;
+      let maxNear = 0;
+      for (const [px, py, pz] of this.framingPoints) {
+        const up = this.pointAngles(camHeight, camRadius, camLookY, lookZ, px, py, pz).up;
+        if (pz < 0) maxFar = Math.max(maxFar, up);
+        else maxNear = Math.max(maxNear, -up);
+      }
+      return maxFar - maxNear;
+    };
+    let lo = -1;
+    let hi = 2.5;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      if (diffAt(mid) > 0) hi = mid;
+      else lo = mid;
+    }
+    return (lo + hi) / 2;
+  }
+
+  private computeRequiredFov(aspect: number): number {
     let maxH = 0;
     let maxV = 0;
     for (const [px, py, pz] of this.framingPoints) {
-      const vx = px - Cx;
-      const vy = py - Cy;
-      const vz = pz - Cz;
-      const fwd = vx * fx + vy * fy + vz * fz;
-      const right = vx * rx + vz * rz;
-      const up = vx * ux + vy * uy + vz * uz;
-      maxH = Math.max(maxH, Math.abs(Math.atan2(right, fwd)));
-      maxV = Math.max(maxV, Math.abs(Math.atan2(up, fwd)));
+      const { up, right } = this.pointAngles(this.camHeight, this.camRadius, this.camLookY, this.camLookZ, px, py, pz);
+      maxH = Math.max(maxH, Math.abs(right));
+      maxV = Math.max(maxV, Math.abs(up));
     }
 
-    const neededHalfV = maxV + marginRad;
-    const neededHalfVFromH = Math.atan(Math.tan(maxH + marginRad) / aspect);
+    const neededHalfV = maxV + Board3D.MARGIN_RAD;
+    const neededHalfVFromH = Math.atan(Math.tan(maxH + Board3D.MARGIN_RAD) / aspect);
     const halfV = Math.max(neededHalfV, neededHalfVFromH);
     return Math.min(115, (halfV * 2 * 180) / Math.PI);
   }
@@ -311,11 +352,11 @@ export class Board3D {
    * Portrait phones (narrow) are pulled back a bit so the wide FOV that requires doesn't get
    * absurdly fisheye-distorted; the FOV itself is then solved analytically, not guessed.
    *
-   * The look-at target is biased toward the near/camera side (camLookZ > 0) rather than the
-   * board's own center: that makes the FAR edge — not the geometric middle — the tight/binding
-   * constraint the FOV solves for, so the board's far edge sits right up against the top of the
-   * screen instead of leaving empty headroom above it, with any slack landing near the bottom
-   * (the player's own side) instead.
+   * The look-at target's Z is solved per-frame (solveSymmetricLookZ), not a fixed bias: it finds
+   * whatever near-side offset makes the near edge (the player's own side) and the far edge
+   * subtend exactly the same angle, so BOTH touch their respective screen edge with the same
+   * margin — the near edge sits flush with the bottom of the screen, not just the far edge flush
+   * with the top, the way a fixed bias left it (all the slack landing at the bottom).
    *
    * Radius and height are derived from a fixed camera DISTANCE and the elevation angle (not a
    * fixed radius with height scaling as tan(angle)) — the latter sends the camera's actual
@@ -324,15 +365,15 @@ export class Board3D {
    * whole board out to near-invisible. Distance stays constant across every angle instead.
    */
   /** Chess's own values, chosen (not guessed — solved numerically against the actual framing
-   * points across a range of real landscape aspect ratios) to maximize how much of the screen the
-   * board fills on BOTH axes at once, not just vertically: a plain perspective camera can't make a
-   * perfectly square board exactly fill a wide rectangular viewport on both axes simultaneously
-   * (their shapes don't match), but this elevation/lookZ combo gets within a few percent of full
-   * width AND height across realistic phone/tablet landscape aspects — far closer than the old
-   * named "angle"/"table" presets ever got (they were tuned only for the vertical gap, which left
-   * huge unused width on the sides). Eased down on wide screens (see wideness below).
-   * Checkers/Corners override this via the constructor's cameraPreset. */
-  private static readonly DEFAULT_CAMERA_PRESET = { elevationDeg: 84, elevationFloorDeg: 49, lookZ: 1 };
+   * points across a range of real landscape aspect ratios, together with solveSymmetricLookZ) to
+   * maximize how much of the screen the board fills on BOTH axes at once: a plain perspective
+   * camera can't make a perfectly square board exactly fill a wide rectangular viewport on both
+   * axes simultaneously (their shapes don't match), but this elevation range gets within a few
+   * percent of full width AND height across realistic phone/tablet landscape aspects — far closer
+   * than the old named "angle"/"table" presets ever got (they were tuned only for the vertical
+   * gap, which left huge unused width on the sides). Eased down on wide screens (see wideness
+   * below). Checkers/Corners override this via the constructor's cameraPreset. */
+  private static readonly DEFAULT_CAMERA_PRESET = { elevationDeg: 87, elevationFloorDeg: 50 };
   /** Fixed camera distance from the board — see the "Radius and height are derived from a fixed
    * DISTANCE" note above applyResponsiveFraming for why this never varies with elevation. */
   private static readonly BASE_DISTANCE = 9.6;
@@ -369,7 +410,7 @@ export class Board3D {
     this.camRadius = distance * Math.cos(elevationRad) + portraitness * 0.5;
     this.camHeight = distance * Math.sin(elevationRad) + portraitness * 1.4; // steepen a bit further on tall phones — a wide board wastes less vertical space viewed from more overhead
     this.camLookY = 0.35 - portraitness * 0.32 + shortScreen * 0.18;
-    this.camLookZ = preset.lookZ;
+    this.camLookZ = this.solveSymmetricLookZ(this.camHeight, this.camRadius, this.camLookY);
     this.camera.fov = this.computeRequiredFov(aspect);
   }
 

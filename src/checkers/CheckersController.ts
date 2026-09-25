@@ -48,7 +48,7 @@ export class CheckersController {
     this.board = new Board3D(container, {
       pieceFactories: CHECKER_FACTORIES,
       pieceHeightAllowance: 0.55,
-      cameraPreset: { elevationDeg: 87, elevationFloorDeg: 55, lookZ: 1 },
+      cameraPreset: { elevationDeg: 87, elevationFloorDeg: 55 },
     });
     this.board.onSquareClick = (sq) => this.handleSquareClick(sq);
 
