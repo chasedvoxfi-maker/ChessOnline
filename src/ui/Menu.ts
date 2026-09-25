@@ -84,6 +84,7 @@ export class Menu {
   el: HTMLDivElement;
   private contentEl: HTMLDivElement;
   private launcherEl: HTMLDivElement;
+  private scrollHintEl: HTMLDivElement;
   private cancelledOnlineWait = false;
   private callbacks: MenuCallbacks;
   private continueInfo: Partial<Record<GameKind, ContinueInfo>>;
@@ -113,13 +114,21 @@ export class Menu {
         <div class="launcher-dropdown hidden"></div>
       </div>
       <div class="menu-content"></div>
+      <div class="menu-scroll-hint hidden" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
       <div class="app-version">v${APP_VERSION}</div>
     `;
     this.contentEl = this.el.querySelector(".menu-content")!;
     this.launcherEl = this.el.querySelector(".game-launcher")!;
+    this.scrollHintEl = this.el.querySelector(".menu-scroll-hint")!;
     this.wireLauncher();
     this.renderGamePicker();
     this.wireAudioControls();
+    // Outside contentEl (never wiped by a panel's innerHTML replace) so a single listener covers
+    // every panel; wireEffects() itself calls updateScrollHint() after each re-render.
+    this.contentEl.addEventListener("scroll", () => this.updateScrollHint());
+    window.addEventListener("resize", () => this.updateScrollHint());
     this.el.querySelector('[data-action="open-settings"]')!.addEventListener("click", () => {
       soundManager.playSelect();
       // Pressing the gear again while settings is already open closes it back to the game
@@ -667,5 +676,19 @@ export class Menu {
         ripple.addEventListener("animationend", () => ripple.remove());
       });
     });
+    // Every panel render calls wireEffects() with the default root (contentEl) — piggyback the
+    // scroll-hint refresh there instead of adding it to each of the 8 render methods separately.
+    if (root === this.contentEl) this.updateScrollHint();
+  }
+
+  /** Shows a bouncing "more below" chevron whenever the current panel overflows and hasn't been
+   * scrolled all the way down yet — on a short landscape phone a single mode-select button can
+   * already fill the whole viewport, giving no hint that "Игра с компьютером"/"Игра онлайн" are
+   * just below it otherwise (native mobile browsers don't show a scrollbar until mid-scroll). */
+  private updateScrollHint() {
+    const el = this.contentEl;
+    const overflowing = el.scrollHeight > el.clientHeight + 4;
+    const atBottom = el.scrollTop >= el.scrollHeight - el.clientHeight - 4;
+    this.scrollHintEl.classList.toggle("hidden", !overflowing || atBottom);
   }
 }

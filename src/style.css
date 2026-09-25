@@ -381,6 +381,42 @@ button {
   overflow-y: auto;
 }
 
+/* A bouncing "more below" cue, shown/hidden by Menu.updateScrollHint() whenever the current
+   panel overflows and isn't scrolled to the bottom yet — a short landscape phone can otherwise
+   fill the whole screen with just the first mode-select button, with nothing to suggest the
+   others are one scroll away. Anchored to the same right inset .menu-content's own padding uses,
+   so it lines up under the (right-biased) content column instead of the whole screen's center. */
+.menu-scroll-hint {
+  position: fixed;
+  right: calc(1.4rem + env(safe-area-inset-right));
+  bottom: calc(1.6rem + env(safe-area-inset-bottom)); /* clears .app-version sitting in the same corner */
+  z-index: 4;
+  pointer-events: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 6, 12, 0.78);
+  border: 1px solid rgba(212, 175, 106, 0.35);
+  color: var(--gold-bright);
+  animation: menu-scroll-hint-bounce 1.6s ease-in-out infinite;
+}
+.menu-scroll-hint svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+@keyframes menu-scroll-hint-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
 /* The dedicated desktop key-art has its title clear earlier proportionally than the portrait
    crop does, but on narrower desktop windows still needs more room than 29vh gives it. */
 @media (min-width: 700px) {
