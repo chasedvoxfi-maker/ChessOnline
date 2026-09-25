@@ -400,7 +400,12 @@ button {
   text-align: center;
   color: var(--gold-bright);
   margin: -0.4rem 0 0.2rem;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8);
+  align-self: center;
+  background: rgba(8, 6, 12, 0.75);
+  border: 1px solid rgba(212, 175, 106, 0.22);
+  border-radius: 999px;
+  padding: 0.35rem 1.2rem;
+  backdrop-filter: blur(6px);
 }
 
 
@@ -713,7 +718,12 @@ button {
   color: var(--gold-bright);
   margin: 0 0 0.3rem;
   text-align: center;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8);
+  align-self: center;
+  background: rgba(8, 6, 12, 0.75);
+  border: 1px solid rgba(212, 175, 106, 0.22);
+  border-radius: 999px;
+  padding: 0.45rem 1.4rem;
+  backdrop-filter: blur(6px);
 }
 
 .difficulty-grid {
@@ -794,7 +804,14 @@ button {
   color: var(--text-dim);
   font-size: 0.92rem;
   min-height: 1.3em;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 4px rgba(0, 0, 0, 0.8);
+}
+/* :not(:empty) so the join screen's unfilled placeholder line (awaiting a join error/success
+   message) doesn't show as a stray empty box before anything's actually happened. */
+.status-line:not(:empty) {
+  background: rgba(8, 6, 12, 0.6);
+  border: 1px solid rgba(212, 175, 106, 0.18);
+  border-radius: 12px;
+  padding: 0.55rem 0.9rem;
 }
 .status-line.error {
   color: var(--danger);
@@ -1486,8 +1503,26 @@ button {
   color: var(--text-dim);
 }
 
+.a2hs-platform {
+  margin: 0 0 1rem;
+  text-align: left;
+}
+.a2hs-platform:last-of-type {
+  margin-bottom: 0.8rem;
+}
+
+.a2hs-platform-label {
+  margin: 0 0 0.4rem;
+  font-family: "Cinzel", serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
 .a2hs-steps {
-  margin: 0 0 0.8rem;
+  margin: 0;
   padding-left: 1.3rem;
   text-align: left;
   font-size: 0.88rem;
@@ -1508,7 +1543,7 @@ button {
 }
 
 .a2hs-note {
-  margin: 0 0 0.9rem;
+  margin: 0.5rem 0 0;
   font-size: 0.76rem;
   color: var(--text-dim);
   font-style: italic;

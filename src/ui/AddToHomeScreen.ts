@@ -38,29 +38,31 @@ function markDismissed() {
 /** Call once at app startup. No-op on desktop, once installed, or after the player has already dismissed it. */
 export function maybeShowAddToHomeScreenHint() {
   if (isStandalone() || alreadyDismissed()) return;
-  const ios = isIOS();
-  const android = isAndroid();
-  if (!ios && !android) return;
+  if (!isIOS() && !isAndroid()) return;
 
-  const steps = ios
-    ? [
-        `Нажмите значок «Поделиться» ${SHARE_ICON} внизу экрана Safari.`,
-        `Выберите «На экран «Домой»» в списке.`,
-      ]
-    : [
-        `Откройте меню ${MENU_ICON} в браузере (три точки).`,
-        `Выберите «Добавить на главный экран» или «Установить приложение».`,
-      ];
-  const extraNote = android ? `<p class="a2hs-note">После установки игра будет открываться в полноэкранном режиме, без адресной строки браузера.</p>` : "";
-
+  // Both platforms' steps, always shown together (not switched by device detection, which isn't
+  // always reliable) — labeled sections so whichever applies is easy to find.
   const overlay = document.createElement("div");
   overlay.className = "a2hs-overlay";
   overlay.innerHTML = `
     <div class="a2hs-card">
       <p class="a2hs-title">Добавьте Chess Online на главный экран</p>
       <p class="a2hs-desc">Так игра будет открываться сразу, как обычное приложение:</p>
-      <ol class="a2hs-steps">${steps.map((s) => `<li>${s}</li>`).join("")}</ol>
-      ${extraNote}
+      <div class="a2hs-platform">
+        <p class="a2hs-platform-label">Для iPhone</p>
+        <ol class="a2hs-steps">
+          <li>Нажмите значок «Поделиться» ${SHARE_ICON} внизу экрана Safari.</li>
+          <li>Выберите «На экран «Домой»» в списке.</li>
+        </ol>
+      </div>
+      <div class="a2hs-platform">
+        <p class="a2hs-platform-label">Для Android</p>
+        <ol class="a2hs-steps">
+          <li>Откройте меню ${MENU_ICON} в браузере (три точки).</li>
+          <li>Выберите «Добавить на главный экран» или «Установить приложение».</li>
+        </ol>
+        <p class="a2hs-note">После установки игра будет открываться в полноэкранном режиме, без адресной строки браузера.</p>
+      </div>
       <button class="a2hs-ok-btn" data-action="a2hs-dismiss">Понятно</button>
     </div>
   `;
