@@ -707,6 +707,143 @@ export class Board3D {
     });
   }
 
+  /**
+   * Animates from whatever is currently displayed to a target position by diffing the two,
+   * instead of an instant snap — used by undo so a taken-back move visibly slides the piece
+   * home, and any captured piece flies back onto the board, mirroring how the move looked going
+   * forward. Works for every game (chess/checkers/Corners) and handles the multi-piece cases
+   * each can produce: castling (two pieces slide back at once) and a checkers chain-jump undo
+   * (several captured pieces reappear at once alongside the one piece that jumped).
+   */
+  animateUndo(pieces: { type: string; color: PieceColor; square: string }[], onComplete?: () => void) {
+    const newBySquare = new Map(pieces.map((p) => [p.square, p]));
+
+    // A piece that changed type without changing owner or square (a checkers/Corners king
+    // demoted back to a man by the undo) isn't caught by the vacated/appeared diff below, since
+    // its square never stops being occupied by the same color — swap its mesh in place first.
+    for (const [square, mesh] of this.pieceMeshes) {
+      const spec = newBySquare.get(square);
+      const current = mesh.userData as { type: string; color: PieceColor };
+      if (spec && spec.color === current.color && spec.type !== current.type) {
+        this.removePiece(square);
+        this.placePiece(square, spec.type, spec.color);
+      }
+    }
+
+    // A square can also change OWNER without ever being empty in between — the capturing piece
+    // ends its move on the very square the capture happened, so undoing it means that square's
+    // occupant needs to leave (counted here as "vacated", to free up its mesh to pair with
+    // wherever it actually came from) at the same time the captured piece needs to reappear
+    // there (counted as "appeared"). Plain occupied-vs-not comparisons below would miss this
+    // since the square is never simply unoccupied.
+    const vacated = [...this.pieceMeshes.entries()]
+      .filter(([sq, mesh]) => {
+        const spec = newBySquare.get(sq);
+        const current = mesh.userData as { color: PieceColor };
+        return !spec || spec.color !== current.color;
+      })
+      .map(([sq]) => sq);
+    const appeared = pieces.filter((p) => {
+      const mesh = this.pieceMeshes.get(p.square);
+      if (!mesh) return true;
+      return (mesh.userData as { color: PieceColor }).color !== p.color;
+    });
+
+    if (vacated.length === 0 || appeared.length === 0) {
+      // Not a simple "one move's worth" diff (shouldn't happen for a real undo) -- fall back to
+      // an instant resync rather than guessing at an animation.
+      this.syncFromPieces(pieces);
+      onComplete?.();
+      return;
+    }
+
+    // Split "appeared" squares into captured pieces flying back onto the board (a matching mesh
+    // is sitting in capturedGroup — checked most-recently-captured first, in case the same
+    // square was the capture site more than once across the game) vs. squares a still-on-board
+    // piece is sliding back to.
+    const restorations: { mesh: THREE.Group; square: string }[] = [];
+    const landings: { square: string; type: string; color: PieceColor }[] = [];
+    for (const p of appeared) {
+      const captured = [...this.capturedGroup.children].reverse();
+      const match = captured.find((m) => {
+        const d = m.userData as { square: string; color: PieceColor; type: string };
+        return d.square === p.square && d.color === p.color && d.type === p.type;
+      }) as THREE.Group | undefined;
+      if (match) restorations.push({ mesh: match, square: p.square });
+      else landings.push(p);
+    }
+
+    // Pair each still-on-board (vacated) mesh with the landing square its piece slides back to —
+    // matched by type+color first (the normal case), falling back to color alone if a promotion
+    // is being undone (the piece's type changes on arrival; handled by swapping the mesh then).
+    const remainingLandings = [...landings];
+    const pairs: { mesh: THREE.Group; from: string; square: string }[] = [];
+    for (const from of vacated) {
+      const mesh = this.pieceMeshes.get(from)!;
+      const { type, color } = mesh.userData as { type: string; color: PieceColor };
+      let idx = remainingLandings.findIndex((l) => l.type === type && l.color === color);
+      if (idx === -1) idx = remainingLandings.findIndex((l) => l.color === color);
+      if (idx === -1) continue; // defensive: leave this mesh where it is rather than guess wrong
+      const [landing] = remainingLandings.splice(idx, 1);
+      pairs.push({ mesh, from, square: landing.square });
+    }
+
+    let pending = pairs.length + restorations.length;
+    if (pending === 0) {
+      onComplete?.();
+      return;
+    }
+    const finishOne = () => {
+      pending--;
+      if (pending <= 0) onComplete?.();
+    };
+
+    for (const { mesh, from, square } of pairs) {
+      this.pieceMeshes.delete(from);
+      this.pieceMeshes.set(square, mesh);
+      const target = newBySquare.get(square)!;
+      const needsSwap = target.type !== (mesh.userData as { type: string }).type;
+      const { x, z } = squareToWorld(square);
+      this.anims.push({
+        mesh,
+        from: mesh.position.clone(),
+        to: new THREE.Vector3(x, 0, z),
+        arcHeight: 0.55,
+        duration: 0.42,
+        elapsed: 0,
+        onComplete: () => {
+          mesh.userData.square = square;
+          if (needsSwap) {
+            this.removePiece(square);
+            this.placePiece(square, target.type, target.color);
+          }
+          finishOne();
+        },
+      });
+    }
+
+    for (const { mesh, square } of restorations) {
+      this.pieceMeshes.set(square, mesh);
+      const { x, z } = squareToWorld(square);
+      this.anims.push({
+        mesh,
+        from: mesh.position.clone(),
+        to: new THREE.Vector3(x, 0, z),
+        arcHeight: 1.0,
+        duration: 0.55,
+        spin: (Math.random() - 0.5) * 4,
+        fromScale: 0.55,
+        toScale: 0.95,
+        elapsed: 0,
+        onComplete: () => {
+          this.scene.add(mesh); // reparents; three.js detaches it from capturedGroup first
+          mesh.userData.square = square;
+          finishOne();
+        },
+      });
+    }
+  }
+
   promotePiece(square: string, newType: string, color: PieceColor) {
     this.removePiece(square);
     const group = this.placePiece(square, newType, color);

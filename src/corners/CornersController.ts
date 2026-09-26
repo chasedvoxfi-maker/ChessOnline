@@ -284,7 +284,10 @@ export class CornersController {
     return this.performUndo();
   }
 
-  /** The actual undo, applied once both sides agree (or immediately for hotseat/AI). */
+  /** The actual undo, applied once both sides agree (or immediately for hotseat/AI). Animates
+   * the piece sliding back (Corners never captures, so there's nothing to fly back onto the
+   * board) instead of an instant snap, mirroring how the move looked going forward — see
+   * Board3D.animateUndo. */
   private performUndo(): boolean {
     if (!this.game.undo()) return false;
     if (this.mode === "ai" && this.game.currentTurn !== this.localHumanColor) this.game.undo();
@@ -292,15 +295,22 @@ export class CornersController {
     this.gameOver = false;
     this.deselect();
     this.board.resetCameraFraming();
-    this.syncBoard();
-    if (this.mode === "hotseat") this.board.setOrientation(this.game.currentTurn);
-    else this.board.setOrientation(this.localHumanColor);
 
-    soundManager.playMove();
-    this.callbacks.onTurnChange?.(this.game.currentTurn);
-    this.callbacks.onMove?.();
-    this.callbacks.onUndoResolved?.();
-    this.autosave();
+    this.busy = true;
+    this.board.animateUndo(
+      this.game.pieces().map((p) => ({ type: "p", color: p.color, square: p.square })),
+      () => {
+        this.busy = false;
+        if (this.mode === "hotseat") this.board.setOrientation(this.game.currentTurn);
+        else this.board.setOrientation(this.localHumanColor);
+
+        soundManager.playMove();
+        this.callbacks.onTurnChange?.(this.game.currentTurn);
+        this.callbacks.onMove?.();
+        this.callbacks.onUndoResolved?.();
+        this.autosave();
+      },
+    );
     return true;
   }
 

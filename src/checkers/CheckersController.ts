@@ -292,7 +292,9 @@ export class CheckersController {
     return this.performUndo();
   }
 
-  /** The actual undo, applied once both sides agree (or immediately for hotseat/AI). */
+  /** The actual undo, applied once both sides agree (or immediately for hotseat/AI). Animates
+   * the piece(s) sliding back (and any capture flying back onto the board) instead of an instant
+   * snap, mirroring how the move looked going forward — see Board3D.animateUndo. */
   private performUndo(): boolean {
     if (!this.game.undo()) return false;
     if (this.mode === "ai" && this.game.currentTurn !== this.localHumanColor) this.game.undo();
@@ -300,15 +302,19 @@ export class CheckersController {
     this.gameOver = false;
     this.deselect();
     this.board.resetCameraFraming();
-    this.syncBoard();
-    if (this.mode === "hotseat") this.board.setOrientation(this.game.currentTurn);
-    else this.board.setOrientation(this.localHumanColor);
 
-    soundManager.playMove();
-    this.callbacks.onTurnChange?.(this.game.currentTurn);
-    this.callbacks.onMove?.();
-    this.callbacks.onUndoResolved?.();
-    this.autosave();
+    this.busy = true;
+    this.board.animateUndo(this.game.pieces(), () => {
+      this.busy = false;
+      if (this.mode === "hotseat") this.board.setOrientation(this.game.currentTurn);
+      else this.board.setOrientation(this.localHumanColor);
+
+      soundManager.playMove();
+      this.callbacks.onTurnChange?.(this.game.currentTurn);
+      this.callbacks.onMove?.();
+      this.callbacks.onUndoResolved?.();
+      this.autosave();
+    });
     return true;
   }
 

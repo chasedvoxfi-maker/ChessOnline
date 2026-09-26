@@ -352,7 +352,9 @@ export class GameController {
     return this.performUndo();
   }
 
-  /** The actual undo, applied once both sides agree (or immediately for hotseat/AI). */
+  /** The actual undo, applied once both sides agree (or immediately for hotseat/AI). Animates
+   * the piece(s) sliding back (and any capture flying back onto the board) instead of an instant
+   * snap, mirroring how the move looked going forward — see Board3D.animateUndo. */
   private performUndo(): boolean {
     if (!this.game.undo()) return false;
     if (this.mode === "ai" && this.game.turn !== this.localHumanColor) this.game.undo();
@@ -362,20 +364,24 @@ export class GameController {
     this.board.showSelection(null);
     this.board.clearLegalMoves();
     this.board.resetCameraFraming();
-    this.syncBoard();
 
-    this.board.clearCheck();
-    if (this.game.inCheck()) {
-      const kingSq = this.game.kingSquare(this.game.turn);
-      if (kingSq) this.board.showCheck(kingSq);
-    }
-    if (this.mode === "hotseat") this.board.setOrientation(this.game.turn);
-    else this.board.setOrientation(this.localHumanColor);
+    this.busy = true;
+    this.board.animateUndo(this.game.pieces(), () => {
+      this.busy = false;
 
-    soundManager.playMove();
-    this.callbacks.onUndo?.(this.game.turn);
-    this.callbacks.onUndoResolved?.();
-    this.autosave();
+      this.board.clearCheck();
+      if (this.game.inCheck()) {
+        const kingSq = this.game.kingSquare(this.game.turn);
+        if (kingSq) this.board.showCheck(kingSq);
+      }
+      if (this.mode === "hotseat") this.board.setOrientation(this.game.turn);
+      else this.board.setOrientation(this.localHumanColor);
+
+      soundManager.playMove();
+      this.callbacks.onUndo?.(this.game.turn);
+      this.callbacks.onUndoResolved?.();
+      this.autosave();
+    });
     return true;
   }
 
