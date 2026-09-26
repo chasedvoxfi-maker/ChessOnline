@@ -20,6 +20,14 @@ export interface CornersControllerCallbacks {
   onMove?: () => void;
   onGameOver?: (info: GameOverInfo) => void;
   onOpponentDisconnected?: () => void;
+  /** Online only: the opponent asked to take back their last move — show a Yes/No prompt and
+   * resolve with the local player's answer. */
+  onUndoRequested?: () => Promise<boolean>;
+  /** Online only: the opponent declined our undo request. */
+  onUndoDeclined?: () => void;
+  /** Fires once an undo actually happens, whichever side triggered it — used to clear a
+   * "waiting for opponent" indicator regardless of how the wait ended. */
+  onUndoResolved?: () => void;
 }
 
 /** Orchestrates the Corners (Уголки) rules engine, 3D board, AI worker and online sync. */
@@ -35,6 +43,8 @@ export class CornersController {
   private localHumanColor: PieceColor = "w";
   private busy = false;
   private gameOver = false;
+  /** Online only: true while we're waiting for the opponent's answer to our own undo request. */
+  private undoRequestPending = false;
 
   callbacks: CornersControllerCallbacks = {};
 
@@ -227,6 +237,33 @@ export class CornersController {
     } else if (msg.kind === "resign") {
       this.gameOver = true;
       this.callbacks.onGameOver?.({ winner: this.localHumanColor, reason: "resign" });
+    } else if (msg.kind === "undoRequest") {
+      void this.handleUndoRequest();
+    } else if (msg.kind === "undoAccept") {
+      this.undoRequestPending = false;
+      this.performUndo();
+    } else if (msg.kind === "undoDecline") {
+      this.undoRequestPending = false;
+      this.callbacks.onUndoDeclined?.();
+    }
+  }
+
+  /** The opponent asked to take back their last move — ask the local human, then reply. Blocks
+   * local interaction (this.busy) while the question is on screen so the two sides can't race. */
+  private async handleUndoRequest() {
+    if (!this.online) return;
+    if (!this.game.canUndo()) {
+      this.online.send({ kind: "undoDecline" });
+      return;
+    }
+    this.busy = true;
+    const accepted = this.callbacks.onUndoRequested ? await this.callbacks.onUndoRequested() : false;
+    this.busy = false;
+    if (accepted) {
+      this.online.send({ kind: "undoAccept" });
+      this.performUndo();
+    } else {
+      this.online.send({ kind: "undoDecline" });
     }
   }
 
@@ -240,8 +277,15 @@ export class CornersController {
     this.callbacks.onGameOver?.({ winner, reason: "resign" });
   }
 
+  /** Not available online directly — see requestUndo(), which asks the opponent's permission
+   * first since their board can't be un-synced without their say-so. */
   undo(): boolean {
     if (this.mode === "online" || this.busy) return false;
+    return this.performUndo();
+  }
+
+  /** The actual undo, applied once both sides agree (or immediately for hotseat/AI). */
+  private performUndo(): boolean {
     if (!this.game.undo()) return false;
     if (this.mode === "ai" && this.game.currentTurn !== this.localHumanColor) this.game.undo();
 
@@ -255,7 +299,19 @@ export class CornersController {
     soundManager.playMove();
     this.callbacks.onTurnChange?.(this.game.currentTurn);
     this.callbacks.onMove?.();
+    this.callbacks.onUndoResolved?.();
     this.autosave();
+    return true;
+  }
+
+  /** Online only: asks the opponent for permission before taking back the last move. Returns
+   * false immediately (no request sent) if there's nothing to undo, a request is already in
+   * flight, or we're mid-animation. */
+  requestUndo(): boolean {
+    if (this.mode !== "online" || !this.online) return false;
+    if (this.busy || this.undoRequestPending || !this.game.canUndo()) return false;
+    this.undoRequestPending = true;
+    this.online.send({ kind: "undoRequest" });
     return true;
   }
 

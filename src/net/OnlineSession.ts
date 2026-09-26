@@ -10,7 +10,12 @@ export type NetMessage =
   | { kind: "rematchRequest" }
   | { kind: "rematchAccept" }
   | { kind: "chat"; text: string }
-  | { kind: "gameInfo"; game: GameKind; formation?: CornersFormation };
+  | { kind: "gameInfo"; game: GameKind; formation?: CornersFormation }
+  /** One player asks to take back the last move; the other must accept or decline before
+   * anything actually reverts — see GameController/CheckersController/CornersController.requestUndo(). */
+  | { kind: "undoRequest" }
+  | { kind: "undoAccept" }
+  | { kind: "undoDecline" };
 
 export interface GameInfo {
   game: GameKind;

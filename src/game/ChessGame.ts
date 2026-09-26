@@ -138,6 +138,10 @@ export class ChessGame {
     return !!this.chess.undo();
   }
 
+  canUndo(): boolean {
+    return this.chess.history().length > 0;
+  }
+
   kingSquare(color: PieceColor): Square | null {
     for (const row of this.chess.board()) {
       for (const cell of row) {

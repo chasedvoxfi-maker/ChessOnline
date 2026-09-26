@@ -21,6 +21,14 @@ export interface GameControllerCallbacks {
   onGameOver?: (info: GameOverInfo) => void;
   onPromotionNeeded?: (color: PieceColor) => Promise<PieceType>;
   onOpponentDisconnected?: () => void;
+  /** Online only: the opponent asked to take back their last move — show a Yes/No prompt and
+   * resolve with the local player's answer. */
+  onUndoRequested?: () => Promise<boolean>;
+  /** Online only: the opponent declined our undo request. */
+  onUndoDeclined?: () => void;
+  /** Fires once an undo actually happens, whichever side triggered it — used to clear a
+   * "waiting for opponent" indicator regardless of how the wait ended. */
+  onUndoResolved?: () => void;
 }
 
 /** Orchestrates the rules engine, 3D board, AI worker and online sync into one cohesive game session. */
@@ -35,6 +43,8 @@ export class GameController {
   private localHumanColor: PieceColor = "w"; // for ai/online modes: which side the local human controls
   private busy = false;
   private gameOver = false;
+  /** Online only: true while we're waiting for the opponent's answer to our own undo request. */
+  private undoRequestPending = false;
 
   callbacks: GameControllerCallbacks = {};
 
@@ -285,6 +295,34 @@ export class GameController {
       this.gameOver = true;
       const winner = this.localHumanColor;
       this.callbacks.onGameOver?.({ winner, reason: "resign" });
+    } else if (msg.kind === "undoRequest") {
+      void this.handleUndoRequest();
+    } else if (msg.kind === "undoAccept") {
+      this.undoRequestPending = false;
+      this.performUndo();
+    } else if (msg.kind === "undoDecline") {
+      this.undoRequestPending = false;
+      this.callbacks.onUndoDeclined?.();
+    }
+  }
+
+  /** The opponent asked to take back their last move — ask the local human, then reply. Blocks
+   * local interaction (this.busy) while the question is on screen so the two sides can't race
+   * (e.g. the local player moving while the request is still being decided). */
+  private async handleUndoRequest() {
+    if (!this.online) return;
+    if (!this.game.canUndo()) {
+      this.online.send({ kind: "undoDecline" });
+      return;
+    }
+    this.busy = true;
+    const accepted = this.callbacks.onUndoRequested ? await this.callbacks.onUndoRequested() : false;
+    this.busy = false;
+    if (accepted) {
+      this.online.send({ kind: "undoAccept" });
+      this.performUndo();
+    } else {
+      this.online.send({ kind: "undoDecline" });
     }
   }
 
@@ -305,11 +343,17 @@ export class GameController {
 
   /**
    * Takes back one ply. In AI mode this also unwinds the computer's reply when there is one,
-   * so a single tap always hands the turn straight back to the human. Not available online —
-   * the opponent's board can't be un-synced. Works even after the game has ended.
+   * so a single tap always hands the turn straight back to the human. Not available online
+   * directly — see requestUndo(), which asks the opponent's permission first since their board
+   * can't be un-synced without their say-so. Works even after the game has ended.
    */
   undo(): boolean {
     if (this.mode === "online" || this.busy) return false;
+    return this.performUndo();
+  }
+
+  /** The actual undo, applied once both sides agree (or immediately for hotseat/AI). */
+  private performUndo(): boolean {
     if (!this.game.undo()) return false;
     if (this.mode === "ai" && this.game.turn !== this.localHumanColor) this.game.undo();
 
@@ -330,7 +374,22 @@ export class GameController {
 
     soundManager.playMove();
     this.callbacks.onUndo?.(this.game.turn);
+    this.callbacks.onUndoResolved?.();
     this.autosave();
+    return true;
+  }
+
+  /**
+   * Online only: asks the opponent for permission before taking back the last move, instead of
+   * undoing right away — their board can't be un-synced without their say-so. Returns false
+   * immediately (no request sent) if there's nothing to undo, a request is already in flight, or
+   * we're mid-animation.
+   */
+  requestUndo(): boolean {
+    if (this.mode !== "online" || !this.online) return false;
+    if (this.busy || this.undoRequestPending || !this.game.canUndo()) return false;
+    this.undoRequestPending = true;
+    this.online.send({ kind: "undoRequest" });
     return true;
   }
 

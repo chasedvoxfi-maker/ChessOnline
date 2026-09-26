@@ -138,6 +138,7 @@ function buildHud(
     restart(): void;
     saveNow(): boolean;
     undo(): boolean;
+    requestUndo(): boolean;
     board: { setTiltOffsetDeg(deg: number): void; flipCamera(): void };
   },
 ): HUD {
@@ -154,9 +155,9 @@ function buildHud(
       onTiltChange: (deg) => ctrl.board.setTiltOffsetDeg(deg),
       onFlipCamera: () => ctrl.board.flipCamera(),
       onSave: () => ctrl.saveNow(),
-      onUndo: () => ctrl.undo(),
+      onUndo: () => (mode === "online" ? ctrl.requestUndo() : ctrl.undo()),
     },
-    { hotseat: mode === "hotseat", saveable: mode !== "online", undoable: mode !== "online" },
+    { hotseat: mode === "hotseat", saveable: mode !== "online", undoable: true, online: mode === "online" },
   );
 }
 
@@ -198,6 +199,9 @@ function startChessGame(boardContainer: HTMLElement, screen: HTMLElement, opts: 
     onPromotionNeeded: (color) => hud.promptPromotion(color),
     onGameOver: (info) => hud.showGameOver(info),
     onOpponentDisconnected: () => hud.showDisconnectNotice(),
+    onUndoRequested: () => hud.promptUndoRequest(),
+    onUndoDeclined: () => hud.showUndoDeclined(),
+    onUndoResolved: () => hud.hideUndoWaiting(),
   };
 
   if (opts.resume) {
@@ -225,6 +229,9 @@ function startCheckersGame(boardContainer: HTMLElement, screen: HTMLElement, opt
     onMove: () => hud.setTurn(ctrl.game.currentTurn, false),
     onGameOver: (info) => hud.showGameOver(info),
     onOpponentDisconnected: () => hud.showDisconnectNotice(),
+    onUndoRequested: () => hud.promptUndoRequest(),
+    onUndoDeclined: () => hud.showUndoDeclined(),
+    onUndoResolved: () => hud.hideUndoWaiting(),
   };
 
   if (opts.resume) {
@@ -253,6 +260,9 @@ function startCornersGame(boardContainer: HTMLElement, screen: HTMLElement, opts
     onMove: () => hud.setTurn(ctrl.game.currentTurn, false),
     onGameOver: (info) => hud.showGameOver(info),
     onOpponentDisconnected: () => hud.showDisconnectNotice(),
+    onUndoRequested: () => hud.promptUndoRequest(),
+    onUndoDeclined: () => hud.showUndoDeclined(),
+    onUndoResolved: () => hud.hideUndoWaiting(),
   };
 
   if (opts.resume) {

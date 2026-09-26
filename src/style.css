@@ -1120,6 +1120,35 @@ button {
   }
 }
 
+/* Online undo flow: shown to the requester while waiting for the opponent's answer, then
+   repurposed (same element, new text) to flash a "declined" notice if they say no. */
+.undo-status-banner {
+  pointer-events: none;
+  align-self: center;
+  margin-top: 0.6rem;
+  padding: 0.35rem 1.1rem;
+  border-radius: 999px;
+  background: rgba(212, 175, 106, 0.16);
+  border: 1px solid rgba(212, 175, 106, 0.55);
+  color: var(--gold-bright);
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.undo-request-text {
+  font-size: 1.02rem;
+  color: var(--text-main);
+  text-align: center;
+  max-width: 280px;
+  margin: 0;
+}
+
+.undo-request-actions {
+  display: flex;
+  gap: 0.7rem;
+}
+
 .hud-actions {
   pointer-events: auto;
   display: flex;

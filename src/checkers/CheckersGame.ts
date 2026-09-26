@@ -279,6 +279,10 @@ export class CheckersGame {
     return true;
   }
 
+  canUndo(): boolean {
+    return this.history.length > 0;
+  }
+
   serialize(): { pieces: CheckerPiece[]; turn: PieceColor } {
     return { pieces: this.pieces(), turn: this.turn };
   }

@@ -205,6 +205,10 @@ export class CornersGame {
     return true;
   }
 
+  canUndo(): boolean {
+    return this.history.length > 0;
+  }
+
   serialize(): { pieces: CornersPiece[]; turn: PieceColor; formation: CornersFormation } {
     return { pieces: this.pieces(), turn: this.turn, formation: this.formation };
   }

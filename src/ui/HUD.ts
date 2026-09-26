@@ -48,7 +48,8 @@ export interface HUDCallbacks {
   onFlipCamera: () => void;
   /** Persists the current game so it can be resumed later. Returns false if this game can't be saved (online). */
   onSave: () => boolean;
-  /** Takes back one ply. Returns false if there was nothing to undo, or undo isn't available (online). */
+  /** Takes back one ply (hotseat/AI), or sends an online undo request — see the `online` HUD
+   * option. Returns false if there was nothing to undo, or a request is already in flight. */
   onUndo: () => boolean;
 }
 
@@ -61,16 +62,20 @@ interface MenuRowSpec {
 export class HUD {
   el: HTMLDivElement;
   private isHotseat: boolean;
+  private isOnline: boolean;
   private callbacks: HUDCallbacks;
 
-  constructor(callbacks: HUDCallbacks, opts: { hotseat: boolean; saveable: boolean; undoable: boolean }) {
+  constructor(callbacks: HUDCallbacks, opts: { hotseat: boolean; saveable: boolean; undoable: boolean; online: boolean }) {
     this.callbacks = callbacks;
     this.isHotseat = opts.hotseat;
+    this.isOnline = opts.online;
     this.el = document.createElement("div");
     this.el.className = "hud";
 
     const rows: MenuRowSpec[] = [
-      ...(opts.undoable ? [{ action: "undo", icon: "↩️", label: "Отменить ход" }] : []),
+      ...(opts.undoable
+        ? [{ action: "undo", icon: "↩️", label: this.isOnline ? "Запросить отмену хода" : "Отменить ход" }]
+        : []),
       ...(opts.saveable ? [{ action: "save", icon: "💾", label: "Сохранить игру" }] : []),
       { action: "draw", icon: "🤝", label: "Предложить ничью" },
       { action: "resign", icon: "🏳️", label: "Сдаться" },
@@ -114,6 +119,7 @@ export class HUD {
         <button class="music-nav-btn" data-action="music-next" title="Следующий трек">▶</button>
       </div>
       <div class="check-banner hidden">Шах!</div>
+      <div class="undo-status-banner hidden"></div>
       <div style="flex:1"></div>
     `;
 
@@ -216,8 +222,60 @@ export class HUD {
 
   private handleUndo() {
     const ok = this.callbacks.onUndo();
-    if (ok) soundManager.playSelect();
-    else soundManager.playIllegal();
+    if (!ok) {
+      soundManager.playIllegal();
+      return;
+    }
+    soundManager.playSelect();
+    if (this.isOnline) this.showUndoWaiting();
+  }
+
+  /** Online: a small persistent banner while we wait for the opponent's decision on our own
+   * undo request — cleared by hideUndoWaiting() (accepted) or showUndoDeclined() (declined). */
+  private showUndoWaiting() {
+    const banner = this.el.querySelector<HTMLDivElement>(".undo-status-banner");
+    if (!banner) return;
+    banner.textContent = "Ожидаем разрешения соперника на отмену хода…";
+    banner.classList.remove("hidden");
+  }
+
+  hideUndoWaiting() {
+    this.el.querySelector(".undo-status-banner")?.classList.add("hidden");
+  }
+
+  showUndoDeclined() {
+    const banner = this.el.querySelector<HTMLDivElement>(".undo-status-banner");
+    if (!banner) return;
+    banner.textContent = "Соперник отклонил отмену хода";
+    banner.classList.remove("hidden");
+    setTimeout(() => banner.classList.add("hidden"), 2500);
+  }
+
+  /** Online: the opponent wants to take back their last move — asks the local player to accept
+   * or decline, resolving with their answer. */
+  promptUndoRequest(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "overlay";
+      overlay.innerHTML = `
+        <div class="promotion-panel">
+          <h2 class="section-title">Отмена хода</h2>
+          <p class="undo-request-text">Соперник просит отменить последний ход. Разрешить?</p>
+          <div class="undo-request-actions">
+            <button class="primary-btn" data-answer="yes">Да, отменить</button>
+            <button class="hud-btn" data-answer="no">Нет</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      const finish = (answer: boolean) => {
+        soundManager.playSelect();
+        document.body.removeChild(overlay);
+        resolve(answer);
+      };
+      overlay.querySelector('[data-answer="yes"]')!.addEventListener("click", () => finish(true));
+      overlay.querySelector('[data-answer="no"]')!.addEventListener("click", () => finish(false));
+    });
   }
 
   private handleSave() {
