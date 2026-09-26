@@ -67,6 +67,24 @@ export class Board3D {
   private legalMarkers: THREE.Mesh[] = [];
   private lastMoveMarkers: THREE.Mesh[] = [];
 
+  // Adaptive quality: rather than guess a device's tier up front (unreliable, and would punish
+  // capable phones too), every device starts at full quality and this only steps it down if the
+  // measured frame time shows it's genuinely struggling — so nothing changes on a device that
+  // keeps up (confirmed fine on iPhone), while a weaker one (confirmed stuttering on Android,
+  // especially during the camera flip and piece-jump animations, which keep every frame busy)
+  // gets progressively cheaper rendering until it can keep up.
+  private keyLight!: THREE.DirectionalLight;
+  private perfTier = 0;
+  private perfWindowStart = performance.now();
+  private perfSlowFrames = 0;
+  private perfFramesInWindow = 0;
+  private static readonly PERF_MAX_TIER = 3;
+  private static readonly PERF_WINDOW_MS = 1500;
+  /** Frames slower than ~40fps count as "slow" for this purpose. */
+  private static readonly PERF_SLOW_FRAME_MS = 1000 / 40;
+  /** Downgrade once at least this fraction of frames in a window were slow. */
+  private static readonly PERF_SLOW_FRACTION = 0.4;
+
   // Camera elevation — continuously adjustable by the player via setTiltOffsetDeg (a persistent
   // +/- nudge on top of the per-game base preset), rather than a fixed set of named modes. The
   // wooden tabletop (captured pieces rest directly on it) is always visible at any tilt.
@@ -190,6 +208,7 @@ export class Board3D {
     key.shadow.bias = -0.0015;
     key.shadow.radius = 4.5;
     this.scene.add(key);
+    this.keyLight = key;
 
     const rim = new THREE.DirectionalLight(0x8ab4ff, 0.4);
     rim.position.set(-6, 4, -6);
@@ -736,7 +755,9 @@ export class Board3D {
 
   private animate = () => {
     requestAnimationFrame(this.animate);
-    const dt = Math.min(0.05, this.clock.getDelta());
+    const rawDt = this.clock.getDelta();
+    this.trackPerf(rawDt * 1000);
+    const dt = Math.min(0.05, rawDt);
     this.stepAnims(dt);
     this.checkGlow.update(dt);
     this.confetti.update(dt);
@@ -758,6 +779,49 @@ export class Board3D {
 
     this.renderer.render(this.scene, this.camera);
   };
+
+  /** Feeds one frame's raw duration into the rolling window that drives downgradeQuality() —
+   * see the perfTier fields above for why this exists. Anomalously long frames (tab backgrounded,
+   * a GC pause on an otherwise-fine device) are ignored rather than counted as "slow", so a single
+   * stall doesn't trigger a downgrade the device didn't actually need. */
+  private trackPerf(frameMs: number) {
+    if (this.perfTier >= Board3D.PERF_MAX_TIER || frameMs > 300) return;
+    this.perfFramesInWindow++;
+    if (frameMs > Board3D.PERF_SLOW_FRAME_MS) this.perfSlowFrames++;
+    const now = performance.now();
+    if (now - this.perfWindowStart < Board3D.PERF_WINDOW_MS) return;
+    const slowFraction = this.perfFramesInWindow ? this.perfSlowFrames / this.perfFramesInWindow : 0;
+    this.perfWindowStart = now;
+    this.perfSlowFrames = 0;
+    this.perfFramesInWindow = 0;
+    if (slowFraction >= Board3D.PERF_SLOW_FRACTION) this.downgradeQuality();
+  }
+
+  /** Each step targets the next-cheapest thing to give up, so a device only pays for as much of
+   * a quality cut as it actually needs to stay smooth. */
+  private downgradeQuality() {
+    this.perfTier++;
+    if (this.perfTier === 1) {
+      // The single biggest lever: fragment-shader cost (shadows, fog, tone mapping) scales with
+      // the pixel count the GPU actually has to fill, which scales with the pixel ratio squared.
+      // Many budget Android phones report a high devicePixelRatio despite a weak GPU, which is
+      // the worst combination — this is worth trying before touching shadow quality at all.
+      this.renderer.setPixelRatio(1);
+      this.handleResize();
+    } else if (this.perfTier === 2) {
+      // Halve the shadow map's resolution and soften radius — the shadow stays soft, it just
+      // costs a quarter of the fragment-shader shadow sampling.
+      this.keyLight.shadow.mapSize.set(1024, 1024);
+      this.keyLight.shadow.radius = 2;
+      this.keyLight.shadow.map?.dispose();
+      this.keyLight.shadow.map = null;
+    } else if (this.perfTier === 3) {
+      // Last resort: drop real-time shadows entirely. The hemisphere/fill lights still light the
+      // board and pieces clearly; this only triggers for a device still struggling after both
+      // steps above.
+      this.renderer.shadowMap.enabled = false;
+    }
+  }
 
   dispose() {
     window.removeEventListener("resize", this.handleResize);
