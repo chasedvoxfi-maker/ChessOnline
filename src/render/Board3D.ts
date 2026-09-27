@@ -128,7 +128,11 @@ export class Board3D {
     // The look-and-feel picked on the Settings screen (main menu) — read fresh at construction
     // time, so a new game always starts with whatever was last saved there.
     const theme = opts?.theme ?? loadTheme();
-    this.materials = createMaterials(theme.pieceColor, theme.pieceFinish);
+    // The player's own manual graphics choice (Settings → Графика), read the same way — applies
+    // from the very first frame instead of waiting for the automatic perfTier scaling below to
+    // notice a struggling device on its own.
+    const gfx = loadGraphicsPrefs();
+    this.materials = createMaterials(theme.pieceColor, theme.pieceFinish, !gfx.highlights);
     this.pieceFactories = opts?.pieceFactories ?? PIECE_FACTORIES;
     const pieceHeightAllowance = opts?.pieceHeightAllowance ?? 1.3;
     this.framingPoints = [
@@ -140,10 +144,6 @@ export class Board3D {
     ];
     this.cameraPreset = { ...Board3D.DEFAULT_CAMERA_PRESET, ...opts?.cameraPreset };
 
-    // The player's own manual graphics choice (Settings → Графика) — read fresh here just like
-    // the visual theme above, so it applies from the very first frame instead of waiting for the
-    // automatic perfTier scaling below to notice a struggling device on its own.
-    const gfx = loadGraphicsPrefs();
     if (!gfx.shadows) this.perfTier = Board3D.PERF_MAX_TIER; // already at the cheapest tier
     else if (gfx.quality === "low") this.perfTier = 1;
     this.applyGfxReducedClass();
@@ -165,13 +165,13 @@ export class Board3D {
 
     this.setupLights();
 
-    const { group: boardGroup, highlightLayer } = buildBoard(theme.board);
+    const { group: boardGroup, highlightLayer } = buildBoard(theme.board, !gfx.highlights);
     this.scene.add(boardGroup);
     this.highlightLayer = highlightLayer;
     this.scene.add(this.checkGlow.group);
     this.scene.add(this.confetti.group);
 
-    this.tableDecor = buildTableDecor(theme.table);
+    this.tableDecor = buildTableDecor(theme.table, !gfx.highlights, gfx.simpleTable);
     this.scene.add(this.tableDecor.group);
     this.scene.add(this.capturedGroup);
 

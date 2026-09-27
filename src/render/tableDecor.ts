@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { TABLE_TEXTURE_PATH, type TableThemeId } from "./theme";
 import { loadPhotoTexture } from "./textureLoader";
+import { FLAT_FINISH } from "./graphicsPrefs";
 
 /** Outer edge of the board+frame (see board.ts: 8 squares + 2×0.4 frame thickness). */
 const BOARD_OUTER_HALF = 4.4;
@@ -38,25 +39,47 @@ function photoTableTexture(theme: TableThemeId): THREE.Texture {
   return tex;
 }
 
+/** A flat stand-in color per theme, roughly matching that photo's overall tone, for the "simple
+ * texture" graphics option below — same silhouette, no image to decode/sample. */
+const FLAT_TABLE_COLOR: Record<TableThemeId, number> = {
+  light: 0xc9a672,
+  dark: 0x4a3423,
+  pine: 0xdccaa3,
+};
+
 /**
  * The wooden tabletop under the board, visible at every camera tilt. Captured pieces rest
  * directly on it, next to the board (see Board3D.restSlotPosition/nextRestSlot); there's no
  * separate tray box.
+ *
+ * `flatten` drops the clearcoat sheen (the "Блики" graphics option); `simpleTexture` replaces the
+ * photo entirely with a plain flat color (the "Простая текстура" option) — together the cheapest
+ * version of this mesh skips the large tiled image, its clearcoat pass, and the roughness/normal
+ * variation the photo would otherwise carry.
  */
-export function buildTableDecor(tableTheme: TableThemeId = "light"): TableDecor {
+export function buildTableDecor(tableTheme: TableThemeId = "light", flatten = false, simpleTexture = false): TableDecor {
   const group = new THREE.Group();
 
   // Large enough that the tabletop still fills every corner of the frame at the widest FOV /
   // shallowest camera angle the framing solver ever picks — a smaller plane let the scene's
   // background gradient peek through as jarring purple wedges in the far corners.
   const TABLE_SIZE = 90;
-  const tex = photoTableTexture(tableTheme);
-  // A large-enough per-tile scale (few repeats) keeps the area right around the board — what's
-  // actually on screen most of the time — reading as one continuous photo rather than an
-  // obviously repeating pattern.
-  const repeats = TABLE_SIZE / 13;
-  tex.repeat.set(repeats, repeats);
-  const tableMat = new THREE.MeshPhysicalMaterial({ map: tex, roughness: 0.5, clearcoat: 0.15, clearcoatRoughness: 0.3 });
+  const tableMat = new THREE.MeshPhysicalMaterial({
+    roughness: flatten ? FLAT_FINISH.roughness : 0.5,
+    clearcoat: flatten ? 0 : 0.15,
+    clearcoatRoughness: 0.3,
+  });
+  if (simpleTexture) {
+    tableMat.color.set(FLAT_TABLE_COLOR[tableTheme]);
+  } else {
+    const tex = photoTableTexture(tableTheme);
+    // A large-enough per-tile scale (few repeats) keeps the area right around the board — what's
+    // actually on screen most of the time — reading as one continuous photo rather than an
+    // obviously repeating pattern.
+    const repeats = TABLE_SIZE / 13;
+    tex.repeat.set(repeats, repeats);
+    tableMat.map = tex;
+  }
   const tableGeo = new THREE.PlaneGeometry(TABLE_SIZE, TABLE_SIZE);
   tableGeo.rotateX(-Math.PI / 2);
   const table = new THREE.Mesh(tableGeo, tableMat);

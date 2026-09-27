@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { SQUARE_SIZE } from "./coords";
 import { loadPhotoTexture } from "./textureLoader";
 import { BOARD_TEXTURE_PATH, type BoardThemeId } from "./theme";
+import { FLAT_FINISH } from "./graphicsPrefs";
 
 /** A small flat coordinate glyph (file letter or rank number), printed on the frame like a real board. */
 function createCoordLabel(text: string): THREE.Mesh {
@@ -28,7 +29,7 @@ export interface BoardBuild {
   highlightLayer: THREE.Group;
 }
 
-export function buildBoard(boardTheme: BoardThemeId = "light"): BoardBuild {
+export function buildBoard(boardTheme: BoardThemeId = "light", flatten = false): BoardBuild {
   const group = new THREE.Group();
 
   // The playing surface is a single photo of a real board (perspective-corrected to a flat,
@@ -36,8 +37,17 @@ export function buildBoard(boardTheme: BoardThemeId = "light"): BoardBuild {
   // one draw call, and every square gets its own bit of real wood grain instead of a repeated
   // swatch.
   const surfaceTex = loadPhotoTexture(BOARD_TEXTURE_PATH[boardTheme]);
-  const surfaceMat = new THREE.MeshPhysicalMaterial({ map: surfaceTex, roughness: 0.62, clearcoat: 0.08, metalness: 0 });
-  const edgeMat = new THREE.MeshPhysicalMaterial({ color: 0x3a2416, roughness: 0.6, clearcoat: 0.1 });
+  const surfaceMat = new THREE.MeshPhysicalMaterial({
+    map: surfaceTex,
+    roughness: flatten ? FLAT_FINISH.roughness : 0.62,
+    clearcoat: flatten ? 0 : 0.08,
+    metalness: 0,
+  });
+  const edgeMat = new THREE.MeshPhysicalMaterial({
+    color: 0x3a2416,
+    roughness: flatten ? FLAT_FINISH.roughness : 0.6,
+    clearcoat: flatten ? 0 : 0.1,
+  });
   const slabGeo = new THREE.BoxGeometry(8 * SQUARE_SIZE, 0.12, 8 * SQUARE_SIZE);
   // BoxGeometry face order: +x, -x, +y (top), -y, +z, -z — only the top needs the photo.
   const slab = new THREE.Mesh(slabGeo, [edgeMat, edgeMat, surfaceMat, edgeMat, edgeMat, edgeMat]);
@@ -47,7 +57,11 @@ export function buildBoard(boardTheme: BoardThemeId = "light"): BoardBuild {
   group.add(slab);
 
   // frame
-  const frameMat = new THREE.MeshPhysicalMaterial({ color: 0x2b1710, roughness: 0.5, clearcoat: 0.2 });
+  const frameMat = new THREE.MeshPhysicalMaterial({
+    color: 0x2b1710,
+    roughness: flatten ? FLAT_FINISH.roughness : 0.5,
+    clearcoat: flatten ? 0 : 0.2,
+  });
   const frameThickness = 0.4;
   const outer = 8 * SQUARE_SIZE + frameThickness * 2;
   const frameShape = new THREE.Shape();

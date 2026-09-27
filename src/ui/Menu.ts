@@ -21,7 +21,15 @@ import {
   type PieceColorId,
   type PieceFinishId,
 } from "../render/theme";
-import { loadGraphicsPrefs, saveGraphicsPrefs, GRAPHICS_QUALITY_OPTIONS, type GraphicsPrefs, type GraphicsQuality } from "../render/graphicsPrefs";
+import {
+  loadGraphicsPrefs,
+  saveGraphicsPrefs,
+  GRAPHICS_QUALITY_OPTIONS,
+  HIGHLIGHTS_OPTIONS,
+  TABLE_TEXTURE_OPTIONS,
+  type GraphicsPrefs,
+  type GraphicsQuality,
+} from "../render/graphicsPrefs";
 
 export interface MenuCallbacks {
   onStartHotseat: (game: GameKind, formation?: CornersFormation) => void;
@@ -303,7 +311,25 @@ export class Menu {
     this.contentEl.innerHTML = `
       <div class="menu-panel settings-panel">
         <button class="back-btn">← Назад</button>
-        <h2 class="section-title">Настройки внешнего вида</h2>
+        <h2 class="section-title">Настройки</h2>
+
+        <div class="settings-group">
+          <h3 class="settings-group-title">Графика</h3>
+          <div class="settings-options">
+            ${GRAPHICS_QUALITY_OPTIONS.map((o) => this.graphicsOptionHtml("quality", o.id, o.name, o.desc, this.graphics.quality === o.id)).join("")}
+          </div>
+          <div class="settings-options">
+            ${this.graphicsOptionHtml("shadows", "on", "Тени включены", "мягкие тени под фигурами", this.graphics.shadows)}
+            ${this.graphicsOptionHtml("shadows", "off", "Тени выключены", "заметно быстрее на слабых устройствах", !this.graphics.shadows)}
+          </div>
+          <div class="settings-options">
+            ${HIGHLIGHTS_OPTIONS.map((o) => this.graphicsOptionHtml("highlights", o.id, o.name, o.desc, (o.id === "on") === this.graphics.highlights)).join("")}
+          </div>
+          <div class="settings-options">
+            ${TABLE_TEXTURE_OPTIONS.map((o) => this.graphicsOptionHtml("table-texture", o.id, o.name, o.desc, (o.id === "simple") === this.graphics.simpleTable)).join("")}
+          </div>
+          <p class="settings-note">На слабом устройстве игра сама снижает качество на лету — эти настройки лишь ускоряют то же самое, не дожидаясь этого. Применяются к следующей начатой или продолженной партии.</p>
+        </div>
 
         <div class="settings-group">
           <h3 class="settings-group-title">Стол</h3>
@@ -334,21 +360,8 @@ export class Menu {
         </div>
 
         <div class="settings-group">
-          <h3 class="settings-group-title">Графика</h3>
-          <div class="settings-options">
-            ${GRAPHICS_QUALITY_OPTIONS.map((o) => this.graphicsOptionHtml("quality", o.id, o.name, o.desc, this.graphics.quality === o.id)).join("")}
-          </div>
-          <div class="settings-options">
-            ${this.graphicsOptionHtml("shadows", "on", "Тени включены", "мягкие тени под фигурами", this.graphics.shadows)}
-            ${this.graphicsOptionHtml("shadows", "off", "Тени выключены", "заметно быстрее на слабых устройствах", !this.graphics.shadows)}
-          </div>
-          <p class="settings-note">На слабом устройстве игра сама снижает качество на лету — эти настройки лишь ускоряют то же самое, не дожидаясь этого.</p>
-        </div>
-
-        <div class="settings-group">
           <h3 class="settings-group-title">Музыка</h3>
-          ${this.musicThemeBlockHtml("menu", "Главное меню")}
-          ${this.musicThemeBlockHtml("game", "Во время партии")}
+          ${this.musicThemeBlockHtml("game", "Свои треки во время партии")}
           <p class="settings-note">Загруженные треки хранятся только в этом браузере и не передаются никуда.</p>
         </div>
 
@@ -373,10 +386,12 @@ export class Menu {
     this.contentEl.querySelectorAll<HTMLButtonElement>(".settings-option[data-gfx-kind]").forEach((btn) => {
       btn.addEventListener("click", () => {
         soundManager.playSelect();
-        const kind = btn.dataset.gfxKind as "quality" | "shadows";
+        const kind = btn.dataset.gfxKind as "quality" | "shadows" | "highlights" | "table-texture";
         const id = btn.dataset.gfxId!;
         if (kind === "quality") this.graphics.quality = id as GraphicsQuality;
-        else this.graphics.shadows = id === "on";
+        else if (kind === "shadows") this.graphics.shadows = id === "on";
+        else if (kind === "highlights") this.graphics.highlights = id === "on";
+        else this.graphics.simpleTable = id === "simple";
         saveGraphicsPrefs(this.graphics);
         this.renderSettingsPanel();
       });
@@ -388,23 +403,24 @@ export class Menu {
     return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
   }
 
+  /** Only the tracks the player added themselves — the bundled preset list (a dozen-plus
+   * "Тема меню N" entries) was clutter nobody needed to see or manage from here, so it's left
+   * out entirely; it still plays normally, just isn't listed. */
   private musicThemeBlockHtml(theme: MusicTheme, label: string): string {
-    const tracks = musicManager.getTracks(theme);
-    const rows = tracks.length
-      ? tracks
-          .map(
-            (t) => `
+    const customTracks = musicManager.getTracks(theme).filter((t) => isCustomTrack(t.id));
+    const rows = customTracks
+      .map(
+        (t) => `
         <div class="music-track-row">
           <span class="music-track-title">${Menu.escapeHtml(t.title)}</span>
-          ${isCustomTrack(t.id) ? `<button class="music-track-remove" data-remove-theme="${theme}" data-remove-id="${t.id}" title="Удалить трек">✕</button>` : ""}
+          <button class="music-track-remove" data-remove-theme="${theme}" data-remove-id="${t.id}" title="Удалить трек">✕</button>
         </div>`,
-          )
-          .join("")
-      : `<p class="music-track-empty">Треков нет — играет фоновая мелодия</p>`;
+      )
+      .join("");
     return `
       <div class="music-theme-block">
         <p class="music-theme-label">${label}</p>
-        <div class="music-track-list">${rows}</div>
+        ${rows ? `<div class="music-track-list">${rows}</div>` : ""}
         <label class="music-add-btn">
           <span class="music-add-icon">+</span> Добавить трек
           <input type="file" accept="audio/*" data-add-theme="${theme}" hidden />
@@ -446,9 +462,15 @@ export class Menu {
       </button>`;
   }
 
-  /** Same pill-row look as settingsOptionHtml, minus the color swatch — for the graphics-quality
-   * and shadows toggles, which are a plain choice rather than a visual preview. */
-  private graphicsOptionHtml(kind: "quality" | "shadows", id: string, name: string, desc: string, active: boolean): string {
+  /** Same pill-row look as settingsOptionHtml, minus the color swatch — for the plain graphics
+   * toggles below, which are a choice rather than a visual preview. */
+  private graphicsOptionHtml(
+    kind: "quality" | "shadows" | "highlights" | "table-texture",
+    id: string,
+    name: string,
+    desc: string,
+    active: boolean,
+  ): string {
     return `
       <button class="settings-option ${active ? "active" : ""}" data-gfx-kind="${kind}" data-gfx-id="${id}">
         <span class="settings-option-label">${name}<small>${desc}</small></span>

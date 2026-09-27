@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { PIECE_COLOR_PRESETS, PIECE_FINISH_PRESETS, type PieceColorId, type PieceFinishId } from "./theme";
+import { FLAT_FINISH } from "./graphicsPrefs";
 
 export function mesh(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
   const m = new THREE.Mesh(geo, mat);
@@ -20,9 +21,15 @@ export interface PieceMaterials {
  * finish are independent choices — the whole set (white and black alike) shares one finish, the
  * way a real chess set would, while only the dark pieces' color varies.
  */
-export function createMaterials(pieceColor: PieceColorId = "walnut-light", pieceFinish: PieceFinishId = "glossy"): PieceMaterials {
+export function createMaterials(
+  pieceColor: PieceColorId = "walnut-light",
+  pieceFinish: PieceFinishId = "glossy",
+  /** Graphics setting, not a look choice — overrides the finish preset's sheen regardless of
+   * which one is picked, for a device that needs the clearcoat pass gone entirely. */
+  flatten = false,
+): PieceMaterials {
   const colorPreset = PIECE_COLOR_PRESETS[pieceColor];
-  const finish = PIECE_FINISH_PRESETS[pieceFinish];
+  const finish = flatten ? FLAT_FINISH : PIECE_FINISH_PRESETS[pieceFinish];
   const white = new THREE.MeshPhysicalMaterial({
     color: 0xf3ecdd,
     roughness: finish.roughness,
