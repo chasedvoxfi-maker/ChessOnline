@@ -21,6 +21,7 @@ import {
   type PieceColorId,
   type PieceFinishId,
 } from "../render/theme";
+import { loadGraphicsPrefs, saveGraphicsPrefs, GRAPHICS_QUALITY_OPTIONS, type GraphicsPrefs, type GraphicsQuality } from "../render/graphicsPrefs";
 
 export interface MenuCallbacks {
   onStartHotseat: (game: GameKind, formation?: CornersFormation) => void;
@@ -91,6 +92,7 @@ export class Menu {
   private selectedGame: GameKind = "chess";
   private selectedFormation: CornersFormation = "rectangle";
   private theme: AppTheme = loadTheme();
+  private graphics: GraphicsPrefs = loadGraphicsPrefs();
 
   constructor(callbacks: MenuCallbacks, continueInfo: Partial<Record<GameKind, ContinueInfo>> = {}) {
     this.callbacks = callbacks;
@@ -332,6 +334,18 @@ export class Menu {
         </div>
 
         <div class="settings-group">
+          <h3 class="settings-group-title">Графика</h3>
+          <div class="settings-options">
+            ${GRAPHICS_QUALITY_OPTIONS.map((o) => this.graphicsOptionHtml("quality", o.id, o.name, o.desc, this.graphics.quality === o.id)).join("")}
+          </div>
+          <div class="settings-options">
+            ${this.graphicsOptionHtml("shadows", "on", "Тени включены", "мягкие тени под фигурами", this.graphics.shadows)}
+            ${this.graphicsOptionHtml("shadows", "off", "Тени выключены", "заметно быстрее на слабых устройствах", !this.graphics.shadows)}
+          </div>
+          <p class="settings-note">На слабом устройстве игра сама снижает качество на лету — эти настройки лишь ускоряют то же самое, не дожидаясь этого.</p>
+        </div>
+
+        <div class="settings-group">
           <h3 class="settings-group-title">Музыка</h3>
           ${this.musicThemeBlockHtml("menu", "Главное меню")}
           ${this.musicThemeBlockHtml("game", "Во время партии")}
@@ -343,7 +357,7 @@ export class Menu {
     `;
     this.wireEffects();
     this.contentEl.querySelector(".back-btn")!.addEventListener("click", () => this.renderGamePicker());
-    this.contentEl.querySelectorAll<HTMLButtonElement>(".settings-option").forEach((btn) => {
+    this.contentEl.querySelectorAll<HTMLButtonElement>(".settings-option[data-kind]").forEach((btn) => {
       btn.addEventListener("click", () => {
         soundManager.playSelect();
         const kind = btn.dataset.kind as "table" | "board" | "pieceColor" | "pieceFinish";
@@ -353,6 +367,17 @@ export class Menu {
         else if (kind === "pieceColor") this.theme.pieceColor = id as PieceColorId;
         else this.theme.pieceFinish = id as PieceFinishId;
         saveTheme(this.theme);
+        this.renderSettingsPanel();
+      });
+    });
+    this.contentEl.querySelectorAll<HTMLButtonElement>(".settings-option[data-gfx-kind]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        soundManager.playSelect();
+        const kind = btn.dataset.gfxKind as "quality" | "shadows";
+        const id = btn.dataset.gfxId!;
+        if (kind === "quality") this.graphics.quality = id as GraphicsQuality;
+        else this.graphics.shadows = id === "on";
+        saveGraphicsPrefs(this.graphics);
         this.renderSettingsPanel();
       });
     });
@@ -416,6 +441,16 @@ export class Menu {
     return `
       <button class="settings-option ${active ? "active" : ""}" data-kind="${kind}" data-id="${id}">
         <span class="settings-swatch" style="${swatchStyle}"></span>
+        <span class="settings-option-label">${name}<small>${desc}</small></span>
+        ${active ? '<span class="settings-check">✓</span>' : ""}
+      </button>`;
+  }
+
+  /** Same pill-row look as settingsOptionHtml, minus the color swatch — for the graphics-quality
+   * and shadows toggles, which are a plain choice rather than a visual preview. */
+  private graphicsOptionHtml(kind: "quality" | "shadows", id: string, name: string, desc: string, active: boolean): string {
+    return `
+      <button class="settings-option ${active ? "active" : ""}" data-gfx-kind="${kind}" data-gfx-id="${id}">
         <span class="settings-option-label">${name}<small>${desc}</small></span>
         ${active ? '<span class="settings-check">✓</span>' : ""}
       </button>`;

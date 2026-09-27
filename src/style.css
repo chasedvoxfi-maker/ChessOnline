@@ -1649,3 +1649,18 @@ button {
   font-size: 0.9rem;
   letter-spacing: 0.03em;
 }
+
+/* Set by Board3D once a device has visibly struggled to keep up (or the player picked a lower
+   graphics quality manually) — a live backdrop-filter blur over the WebGL canvas behind these
+   panels is its own real compositing cost every frame they're on screen, on top of whatever the
+   3D scene itself costs, so it's worth dropping first and cheaply here rather than only in the
+   scene. The panels already lean on a near-opaque background color, so losing the blur barely
+   changes how they look. */
+body.gfx-reduced .hud-menu-dropdown {
+  backdrop-filter: none;
+}
+body.gfx-reduced .cam-mode-widget,
+body.gfx-reduced .music-nav-widget {
+  backdrop-filter: none;
+  background: rgba(20, 16, 32, 0.94);
+}

@@ -5,6 +5,7 @@ import { squareToWorld, worldToSquare } from "./coords";
 import { createSelectMarker, createLegalDot, createLastMoveMarker, CheckGlow, ConfettiSystem } from "./effects";
 import { buildTableDecor, REST_CENTER_X, type TableDecor } from "./tableDecor";
 import { loadTheme, type AppTheme } from "./theme";
+import { loadGraphicsPrefs, QUALITY_PIXEL_RATIO } from "./graphicsPrefs";
 import type { PieceColor } from "../game/types";
 
 interface ActiveAnim {
@@ -139,9 +140,17 @@ export class Board3D {
     ];
     this.cameraPreset = { ...Board3D.DEFAULT_CAMERA_PRESET, ...opts?.cameraPreset };
 
+    // The player's own manual graphics choice (Settings → Графика) — read fresh here just like
+    // the visual theme above, so it applies from the very first frame instead of waiting for the
+    // automatic perfTier scaling below to notice a struggling device on its own.
+    const gfx = loadGraphicsPrefs();
+    if (!gfx.shadows) this.perfTier = Board3D.PERF_MAX_TIER; // already at the cheapest tier
+    else if (gfx.quality === "low") this.perfTier = 1;
+    this.applyGfxReducedClass();
+
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY_PIXEL_RATIO[gfx.quality]));
+    this.renderer.shadowMap.enabled = gfx.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.4;
@@ -956,8 +965,33 @@ export class Board3D {
       // Last resort: drop real-time shadows entirely. The hemisphere/fill lights still light the
       // board and pieces clearly; this only triggers for a device still struggling after both
       // steps above.
+      //
+      // Just flipping renderer.shadowMap.enabled off isn't enough on its own: every material
+      // already compiled its shader with shadow-sampling code baked in (decided the first time
+      // each one rendered, back when shadows were still on), so it goes on sampling the shadow
+      // map texture — which has now simply stopped being refreshed — forever after. The result is
+      // a "ghost" shadow frozen wherever each piece happened to be the moment shadows turned off,
+      // even once it's moved or been captured (reported on a real Android tablet). Turning the
+      // light's own castShadow off too and forcing every material to recompile removes the
+      // shadow-sampling code path entirely instead of just freezing its input.
+      this.keyLight.castShadow = false;
       this.renderer.shadowMap.enabled = false;
+      this.scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+        for (const m of mats) m.needsUpdate = true;
+      });
     }
+    this.applyGfxReducedClass();
+  }
+
+  /** Once the 3D scene is visibly struggling (or the player picked a lower quality manually),
+   * the HUD's own overlay panels are worth cutting back too — a live backdrop-filter blur over a
+   * WebGL canvas is its own significant compositing cost, independent of anything in the scene
+   * itself, and this is the one hook that reaches DOM/CSS from here. See the .gfx-reduced rules
+   * in style.css for what actually changes. */
+  private applyGfxReducedClass() {
+    document.body.classList.toggle("gfx-reduced", this.perfTier >= 1);
   }
 
   dispose() {
