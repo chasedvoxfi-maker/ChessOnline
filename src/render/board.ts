@@ -37,6 +37,13 @@ export function buildBoard(boardTheme: BoardThemeId = "light", flatten = false):
   // one draw call, and every square gets its own bit of real wood grain instead of a repeated
   // swatch.
   const surfaceTex = loadPhotoTexture(BOARD_TEXTURE_PATH[boardTheme]);
+  // The source photo's own checkerboard reads with the wrong parity against real chess/checkers
+  // convention (a1 must be dark, h1 light) once mapped onto our square grid — mirroring it here
+  // flips every square's apparent color without needing a re-cropped asset. (An 8-wide board
+  // mirrors cleanly: column i and its mirror 7-i always have opposite parity.)
+  surfaceTex.wrapS = THREE.RepeatWrapping;
+  surfaceTex.repeat.x = -1;
+  surfaceTex.offset.x = 1;
   const surfaceMat = new THREE.MeshPhysicalMaterial({
     map: surfaceTex,
     roughness: flatten ? FLAT_FINISH.roughness : 0.62,

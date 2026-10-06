@@ -5,7 +5,7 @@ import { squareToWorld, worldToSquare } from "./coords";
 import { createSelectMarker, createLegalDot, createLastMoveMarker, CheckGlow, ConfettiSystem } from "./effects";
 import { buildTableDecor, REST_CENTER_X, type TableDecor } from "./tableDecor";
 import { loadTheme, type AppTheme } from "./theme";
-import { loadGraphicsPrefs, QUALITY_PIXEL_RATIO } from "./graphicsPrefs";
+import { loadGraphicsPrefs, QUALITY_PIXEL_RATIO, QUALITY_ANTIALIAS } from "./graphicsPrefs";
 import type { PieceColor } from "../game/types";
 
 interface ActiveAnim {
@@ -75,6 +75,9 @@ export class Board3D {
   // especially during the camera flip and piece-jump animations, which keep every frame busy)
   // gets progressively cheaper rendering until it can keep up.
   private keyLight!: THREE.DirectionalLight;
+  private fpsEl: HTMLDivElement | null = null;
+  private fpsFrames = 0;
+  private fpsAccumMs = 0;
   private perfTier = 0;
   private perfWindowStart = performance.now();
   private perfSlowFrames = 0;
@@ -148,14 +151,26 @@ export class Board3D {
     else if (gfx.quality === "low") this.perfTier = 1;
     this.applyGfxReducedClass();
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    this.renderer = new THREE.WebGLRenderer({ antialias: QUALITY_ANTIALIAS[gfx.quality], alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY_PIXEL_RATIO[gfx.quality]));
     this.renderer.shadowMap.enabled = gfx.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // The filmic curve is a real per-pixel cost of its own; skip it on the cheapest preset, where
+    // a flatter, slightly less cinematic image is worth it.
+    this.renderer.toneMapping = gfx.quality === "low" ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.4;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
+
+    if (gfx.showFps) {
+      const el = document.createElement("div");
+      el.style.cssText =
+        "position:fixed;left:6px;bottom:6px;z-index:9999;padding:3px 7px;border-radius:6px;" +
+        "background:rgba(0,0,0,0.65);color:#9f9;font:600 12px monospace;pointer-events:none;white-space:pre;";
+      el.textContent = "…";
+      document.body.appendChild(el);
+      this.fpsEl = el;
+    }
 
     this.scene.background = bgGradientTexture();
     this.scene.fog = new THREE.FogExp2(0x0d0a18, 0.022);
@@ -902,7 +917,9 @@ export class Board3D {
   private animate = () => {
     requestAnimationFrame(this.animate);
     const rawDt = this.clock.getDelta();
-    this.trackPerf(rawDt * 1000);
+    const frameMs = rawDt * 1000;
+    this.trackPerf(frameMs);
+    if (this.fpsEl) this.updateFpsOverlay(frameMs);
     const dt = Math.min(0.05, rawDt);
     this.stepAnims(dt);
     this.checkGlow.update(dt);
@@ -925,6 +942,20 @@ export class Board3D {
 
     this.renderer.render(this.scene, this.camera);
   };
+
+  /** Independent of trackPerf()/perfTier (which stops counting once fully downgraded) — this
+   * keeps reporting real numbers regardless of tier, since the whole point is diagnosing a
+   * device that's still struggling even at the cheapest settings. */
+  private updateFpsOverlay(frameMs: number) {
+    this.fpsFrames++;
+    this.fpsAccumMs += frameMs;
+    if (this.fpsAccumMs < 500) return;
+    const avgMs = this.fpsAccumMs / this.fpsFrames;
+    const fps = 1000 / avgMs;
+    this.fpsEl!.textContent = `${fps.toFixed(0)} fps · ${avgMs.toFixed(1)} ms · q${this.perfTier}`;
+    this.fpsFrames = 0;
+    this.fpsAccumMs = 0;
+  }
 
   /** Feeds one frame's raw duration into the rolling window that drives downgradeQuality() —
    * see the perfTier fields above for why this exists. Anomalously long frames (tab backgrounded,
@@ -998,6 +1029,7 @@ export class Board3D {
     window.removeEventListener("resize", this.handleResize);
     window.visualViewport?.removeEventListener("resize", this.handleResize);
     this.renderer.domElement.removeEventListener("click", this.handleClick);
+    this.fpsEl?.remove();
     this.renderer.dispose();
   }
 }

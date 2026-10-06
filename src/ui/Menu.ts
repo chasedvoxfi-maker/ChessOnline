@@ -27,6 +27,7 @@ import {
   GRAPHICS_QUALITY_OPTIONS,
   HIGHLIGHTS_OPTIONS,
   TABLE_TEXTURE_OPTIONS,
+  SHOW_FPS_OPTIONS,
   type GraphicsPrefs,
   type GraphicsQuality,
 } from "../render/graphicsPrefs";
@@ -329,6 +330,10 @@ export class Menu {
             ${TABLE_TEXTURE_OPTIONS.map((o) => this.graphicsOptionHtml("table-texture", o.id, o.name, o.desc, (o.id === "simple") === this.graphics.simpleTable)).join("")}
           </div>
           <p class="settings-note">На слабом устройстве игра сама снижает качество на лету — эти настройки лишь ускоряют то же самое, не дожидаясь этого. Применяются к следующей начатой или продолженной партии.</p>
+          <div class="settings-options">
+            ${SHOW_FPS_OPTIONS.map((o) => this.graphicsOptionHtml("show-fps", o.id, o.name, o.desc, (o.id === "on") === this.graphics.showFps)).join("")}
+          </div>
+          <p class="settings-note">Если выбрано низкое качество, а счётчик всё равно показывает мало кадров в секунду — дело не в графике, напишите об этом.</p>
         </div>
 
         <div class="settings-group">
@@ -386,12 +391,13 @@ export class Menu {
     this.contentEl.querySelectorAll<HTMLButtonElement>(".settings-option[data-gfx-kind]").forEach((btn) => {
       btn.addEventListener("click", () => {
         soundManager.playSelect();
-        const kind = btn.dataset.gfxKind as "quality" | "shadows" | "highlights" | "table-texture";
+        const kind = btn.dataset.gfxKind as "quality" | "shadows" | "highlights" | "table-texture" | "show-fps";
         const id = btn.dataset.gfxId!;
         if (kind === "quality") this.graphics.quality = id as GraphicsQuality;
         else if (kind === "shadows") this.graphics.shadows = id === "on";
         else if (kind === "highlights") this.graphics.highlights = id === "on";
-        else this.graphics.simpleTable = id === "simple";
+        else if (kind === "table-texture") this.graphics.simpleTable = id === "simple";
+        else this.graphics.showFps = id === "on";
         saveGraphicsPrefs(this.graphics);
         this.renderSettingsPanel();
       });
@@ -465,7 +471,7 @@ export class Menu {
   /** Same pill-row look as settingsOptionHtml, minus the color swatch — for the plain graphics
    * toggles below, which are a choice rather than a visual preview. */
   private graphicsOptionHtml(
-    kind: "quality" | "shadows" | "highlights" | "table-texture",
+    kind: "quality" | "shadows" | "highlights" | "table-texture" | "show-fps",
     id: string,
     name: string,
     desc: string,

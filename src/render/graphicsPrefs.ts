@@ -23,11 +23,21 @@ export interface GraphicsPrefs {
    * skips that image entirely (no decode/upload, no per-pixel sampling), the biggest single
    * texture-driven cost in the scene after the board and pieces themselves. */
   simpleTable: boolean;
+  /** A small on-screen frame-time readout (ms/frame + fps), for telling whether a device is
+   * actually GPU-bound (these graphics settings help) or bottlenecked somewhere else entirely
+   * (they won't) — a real number beats guessing at the next lever to pull. */
+  showFps: boolean;
 }
 
 const KEY = "chessonline-graphics-v1";
 
-export const DEFAULT_GRAPHICS: GraphicsPrefs = { quality: "high", shadows: true, highlights: true, simpleTable: false };
+export const DEFAULT_GRAPHICS: GraphicsPrefs = {
+  quality: "high",
+  shadows: true,
+  highlights: true,
+  simpleTable: false,
+  showFps: false,
+};
 
 export function loadGraphicsPrefs(): GraphicsPrefs {
   try {
@@ -39,6 +49,7 @@ export function loadGraphicsPrefs(): GraphicsPrefs {
         shadows: typeof parsed.shadows === "boolean" ? parsed.shadows : DEFAULT_GRAPHICS.shadows,
         highlights: typeof parsed.highlights === "boolean" ? parsed.highlights : DEFAULT_GRAPHICS.highlights,
         simpleTable: typeof parsed.simpleTable === "boolean" ? parsed.simpleTable : DEFAULT_GRAPHICS.simpleTable,
+        showFps: typeof parsed.showFps === "boolean" ? parsed.showFps : DEFAULT_GRAPHICS.showFps,
       };
     }
   } catch {
@@ -71,12 +82,30 @@ export const TABLE_TEXTURE_OPTIONS: { id: "photo" | "simple"; name: string; desc
   { id: "simple", name: "Простая текстура", desc: "однотонный стол — быстрее на слабых устройствах" },
 ];
 
+export const SHOW_FPS_OPTIONS: { id: "on" | "off"; name: string; desc: string }[] = [
+  { id: "off", name: "Счётчик FPS скрыт", desc: "" },
+  { id: "on", name: "Показать FPS", desc: "счётчик кадров в углу экрана — помогает понять, в чём дело" },
+];
+
 /** Pixel-ratio cap per quality level — the single biggest lever on fragment-shader cost, since
- * it scales with the square of the device's actual rendered resolution. */
+ * it scales with the square of the device's actual rendered resolution. "Экономное" goes below
+ * the device's native 1x, genuinely rendering fewer pixels (not just capping how far it scales
+ * up) — visibly softer, but on a fill-rate-bound device this is the biggest win available short
+ * of turning something off outright. */
 export const QUALITY_PIXEL_RATIO: Record<GraphicsQuality, number> = {
   high: 2,
-  medium: 1.5,
-  low: 1,
+  medium: 1.25,
+  low: 0.75,
+};
+
+/** Whether to request a multisampled (antialiased) WebGL context — its own real, separate GPU
+ * cost from resolution/shadows/clearcoat, and one some mobile GPUs implement particularly
+ * inefficiently. Fixed at renderer creation (can't be toggled after construction the way the
+ * other settings can), so only the preset picked before a game starts applies. */
+export const QUALITY_ANTIALIAS: Record<GraphicsQuality, boolean> = {
+  high: true,
+  medium: false,
+  low: false,
 };
 
 /** Shared "flatten it" material values for when highlights are turned off — used by the board
